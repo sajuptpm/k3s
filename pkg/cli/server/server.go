@@ -526,6 +526,7 @@ func run(app *cli.Context, cfg *cmds.Server, leaderControllers server.CustomCont
 	}
 
 	logrus.Info("Starting " + version.Program + " " + app.App.Version)
+	logrus.Info("Custom K3s build: includes a kube-router fix for an iptables race condition during concurrent rule modifications")
 
 	notifySocket := os.Getenv("NOTIFY_SOCKET")
 	os.Unsetenv("NOTIFY_SOCKET")

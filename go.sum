@@ -817,8 +817,6 @@ github.com/k3s-io/kine v0.14.12 h1:He4hfjkFnd6zV/mwO7WUIsMp7zHAU02J4ALlViY8pKA=
 github.com/k3s-io/kine v0.14.12/go.mod h1:5C5dPvFbapdvyLurH1Ls4xGdgl/Gqn+73BunjDndXBU=
 github.com/k3s-io/klog/v2 v2.120.1-k3s1 h1:7twAHPFpZA21KdMnMNnj68STQMPldAxF2Zsaol57dxw=
 github.com/k3s-io/klog/v2 v2.120.1-k3s1/go.mod h1:3Jpz1GvMt720eyJH1ckRHK1EDfpxISzJ7I9OYgaDtPE=
-github.com/k3s-io/kube-router/v2 v2.6.3-k3s1 h1:RZjUBIuitXCuYoCzm1aM6p5EgQFC5k3N72j4pBIc2j4=
-github.com/k3s-io/kube-router/v2 v2.6.3-k3s1/go.mod h1:RaxDc+SBKB33+fjao+LeDue4CaUajk02eCHXVK/V4YE=
 github.com/k3s-io/kubernetes v1.35.2-k3s1 h1:yxdUheiz1NKvqCwUFJGI4kUgsoUc667kV//AKsI768k=
 github.com/k3s-io/kubernetes v1.35.2-k3s1/go.mod h1:AaPpCpiS8oAqRbEwpY5r3RitLpwpVp5lVXKFkJril58=
 github.com/k3s-io/kubernetes/staging/src/k8s.io/api v1.35.2-k3s1 h1:fLdshBrLR8DzmpzoGcvQjnwIURqiNawtMdkKLHTsDRo=
@@ -1262,6 +1260,8 @@ github.com/smartystreets/goconvey v1.7.2 h1:9RBaZCeXEQ3UselpuwUQHltGVXvdwm6cv1hg
 github.com/smartystreets/goconvey v1.7.2/go.mod h1:Vw0tHAZW6lzCRk3xgdin6fKYcG+G3Pg9vgXWeJpQFMM=
 github.com/soheilhy/cmux v0.1.5 h1:jjzc5WVemNEDTLwv9tlmemhC73tI08BNOIGwBOo10Js=
 github.com/soheilhy/cmux v0.1.5/go.mod h1:T7TcVDs9LWfQgPlPsdngu6I6QIoyIFZDDC6sNE1GqG0=
+github.com/soorajsomans/k3s-kube-router/v2 v2.6.3-k3s1.0.20260826161401-5c51aee03da1 h1:NNlSzq+M1mggZ/LotIHga4LbJ8efyNew0PoNuziSYVo=
+github.com/soorajsomans/k3s-kube-router/v2 v2.6.3-k3s1.0.20260826161401-5c51aee03da1/go.mod h1:RaxDc+SBKB33+fjao+LeDue4CaUajk02eCHXVK/V4YE=
 github.com/spaolacci/murmur3 v1.1.0 h1:7c1g84S4BPRrfL5Xrdp6fOJ206sU9y293DDHaoy0bLI=
 github.com/spaolacci/murmur3 v1.1.0/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=
 github.com/spf13/afero v1.3.3/go.mod h1:5KUK8ByomD5Ti5Artl0RtHeI5pTF7MIDuXL3yY520V4=
