@@ -1260,8 +1260,8 @@ github.com/smartystreets/goconvey v1.7.2 h1:9RBaZCeXEQ3UselpuwUQHltGVXvdwm6cv1hg
 github.com/smartystreets/goconvey v1.7.2/go.mod h1:Vw0tHAZW6lzCRk3xgdin6fKYcG+G3Pg9vgXWeJpQFMM=
 github.com/soheilhy/cmux v0.1.5 h1:jjzc5WVemNEDTLwv9tlmemhC73tI08BNOIGwBOo10Js=
 github.com/soheilhy/cmux v0.1.5/go.mod h1:T7TcVDs9LWfQgPlPsdngu6I6QIoyIFZDDC6sNE1GqG0=
-github.com/soorajsomans/k3s-kube-router/v2 v2.6.3-k3s1.0.20260826161401-5c51aee03da1 h1:NNlSzq+M1mggZ/LotIHga4LbJ8efyNew0PoNuziSYVo=
-github.com/soorajsomans/k3s-kube-router/v2 v2.6.3-k3s1.0.20260826161401-5c51aee03da1/go.mod h1:RaxDc+SBKB33+fjao+LeDue4CaUajk02eCHXVK/V4YE=
+github.com/soorajsomans/k3s-kube-router/v2 v2.6.3-k3s1.0.20260830100005-e82d640b154f h1:334OuCIdjlIV6Dc/Y/pXpoESkFXc/WrKcJ6JUtc5IDw=
+github.com/soorajsomans/k3s-kube-router/v2 v2.6.3-k3s1.0.20260830100005-e82d640b154f/go.mod h1:RaxDc+SBKB33+fjao+LeDue4CaUajk02eCHXVK/V4YE=
 github.com/spaolacci/murmur3 v1.1.0 h1:7c1g84S4BPRrfL5Xrdp6fOJ206sU9y293DDHaoy0bLI=
 github.com/spaolacci/murmur3 v1.1.0/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=
 github.com/spf13/afero v1.3.3/go.mod h1:5KUK8ByomD5Ti5Artl0RtHeI5pTF7MIDuXL3yY520V4=
