@@ -69,6 +69,8 @@ VERSION_HELM_JOB="v0.9.14-build20260210"
 
 VERSION_GOLANG="go"$(curl -sL "https://raw.githubusercontent.com${PKG_KUBERNETES_K3S/github.com/}/refs/tags/${VERSION_K8S_K3S}/.go-version")
 
+VERSION_GOLANG="go1.25.7"
+
 if [[ -n "$GIT_TAG" ]]; then
     if [[ ! "$GIT_TAG" =~ ^"$VERSION_K8S"[+-] ]]; then
         echo "Tagged version '$GIT_TAG' does not match expected version '$VERSION_K8S[+-]*'" >&2
