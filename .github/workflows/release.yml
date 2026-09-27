@@ -1,6 +1,7 @@
 name: K3s Release
 
 on:
+  workflow_dispatch:
   push:
     tags:
     - "v*"
