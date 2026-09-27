@@ -6,6 +6,7 @@ on:
       - "scripts/airgap/image-list.txt"
       - ".github/workflows/airgap.yaml"
   workflow_call: {}
+  workflow_dispatch:
 
 permissions:
   contents: read
