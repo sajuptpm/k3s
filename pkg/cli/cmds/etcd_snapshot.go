@@ -10,6 +10,11 @@ import (
 const EtcdSnapshotCommand = "etcd-snapshot"
 
 var EtcdSnapshotFlags = []cli.Flag{
+	&cli.StringSliceFlag{
+		Name:        "etcd-snapshot-restrictions",
+		Usage:       "(db) Enforce restrictions on snapshot configuration; when set the selected defaults cannot be overridden via 'etcd-snapshot' options (valid values: zero or more of 'snapshot-dir', 's3-endpoint', 's3-bucket', 's3-folder', 's3-proxy', 'all')",
+		Destination: &ServerConfig.EtcdSnapshotRestrictions,
+	},
 	DebugFlag,
 	ConfigFlag,
 	LogFile,
@@ -55,7 +60,7 @@ var EtcdSnapshotFlags = []cli.Flag{
 	&cli.IntFlag{
 		Name:        "snapshot-retention,",
 		Aliases:     []string{"etcd-snapshot-retention"},
-		Usage:       "(db) Number of snapshots to retain.",
+		Usage:       "(db) Number of local snapshots to retain on each server node",
 		Destination: &ServerConfig.EtcdSnapshotRetention,
 		Value:       defaultSnapshotRentention,
 	},
@@ -127,7 +132,7 @@ var EtcdSnapshotFlags = []cli.Flag{
 	&cli.IntFlag{
 		Name:        "s3-retention",
 		Aliases:     []string{"etcd-s3-retention"},
-		Usage:       "(db) Number of s3 snapshots to retain.",
+		Usage:       "(db) Number of S3 snapshots to retain in the configured region, bucket, and prefix",
 		Destination: &ServerConfig.EtcdS3Retention,
 		Value:       defaultSnapshotRentention,
 	},

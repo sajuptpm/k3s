@@ -35,12 +35,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        branch: 
-          - main
-          - release-1.37
-          - release-1.36
-          - release-1.35
-          - release-1.34
+        include:
+          - branch: main
+            helm_controller_pattern: "*"
+          - branch: release-1.37
+            helm_controller_pattern: "~0.17"
+          - branch: release-1.36
+            helm_controller_pattern: "~0.17"
+          - branch: release-1.35
+            helm_controller_pattern: "~0.17"
+          - branch: release-1.34
+            helm_controller_pattern: "~0.16"
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -49,7 +54,7 @@ jobs:
         uses: ./.github/actions/setup-go
 
       - name: Install Updatecli
-        uses: updatecli/updatecli-action@5dfc616e57b07d2302c3f37e5b72a4ead82dbbf8 # v3.4.0
+        uses: updatecli/updatecli-action@41b9c8d707830a9daebaeaa84c1b62d60b779564 # v3.6.0
 
       - name: Apply Updatecli
         # Never use '--debug' option, because it might leak the access tokens.
@@ -60,3 +65,4 @@ jobs:
           TARGET_BRANCH: ${{ matrix.branch }}
           TARGET_REPO: ${{ github.event.repository.name }}
           TARGET_ORG: ${{ github.repository_owner }}
+          HELM_CONTROLLER_VERSION_PATTERN: ${{ matrix.helm_controller_pattern }}

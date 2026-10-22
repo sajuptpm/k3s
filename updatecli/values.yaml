@@ -9,6 +9,9 @@ github:
 k3s:
   org: "k3s-io"
   repo: "k3s"
+flannel:
+  org: "flannel-io"
+  repo: "flannel"
 klipper_helm:
   org: "k3s-io"
   repo: "klipper-helm"
@@ -25,3 +28,4 @@ helm_controller:
   org: "k3s-io"
   repo: "helm-controller"
   branch: "master"
+  version_pattern: "HELM_CONTROLLER_VERSION_PATTERN"
