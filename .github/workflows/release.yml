@@ -48,7 +48,7 @@ jobs:
 
       - name: Read registry secrets (staging)
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
-        if: ${{ github.repository_owner == 'k3s-io' }}
+        if: contains(fromJSON(vars.TARGET_OWNER || '["k3s-io"]'), github.repository_owner)
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/k3s-suse-registry-stg/credentials registry | STAGING_REGISTRY ;
@@ -189,7 +189,7 @@ jobs:
 
     - name: Read Prime artifacts secrets
       uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
-      if: ${{ github.repository_owner == 'k3s-io' }}
+      if: contains(fromJSON(vars.TARGET_OWNER || '["k3s-io"]'), github.repository_owner)
       with:
         secrets: |
           secret/data/github/repo/${{ github.repository }}/prime-artifacts-uploader/credentials accessKeyId | AWS_ACCESS_KEY_ID ;
@@ -212,7 +212,7 @@ jobs:
 
     - name: Configure AWS Credentials (s3)
       uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6
-      if: ${{ github.repository_owner == 'k3s-io' }}
+      if: contains(fromJSON(vars.TARGET_OWNER || '["k3s-io"]'), github.repository_owner)
       with:
         aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -251,13 +251,13 @@ jobs:
       run: gh release create -R "${GITHUB_REPOSITORY}" --prerelease --generate-notes "${GITHUB_REF_NAME}" "${GITHUB_WORKSPACE}"/dist/artifacts/k3s* "${GITHUB_WORKSPACE}"/dist/artifacts/sha256sum*
 
     - name: Update Image Registry for Prime/Staging
-      if: ${{ github.repository_owner == 'k3s-io' }}
+      if: contains(fromJSON(vars.TARGET_OWNER || '["k3s-io"]'), github.repository_owner)
       env:
         REGISTRY: ${{ env.REGISTRY }}
       run: sed -i "s|docker.io|${REGISTRY}|g" dist/artifacts/k3s-images.txt
 
     - name: Upload Assets to S3
-      if: ${{ github.repository_owner == 'k3s-io' }}
+      if: contains(fromJSON(vars.TARGET_OWNER || '["k3s-io"]'), github.repository_owner)
       env:
         BUCKET: ${{ env.PRIME_ARTIFACTS_BUCKET_NAME }}
       run: |
