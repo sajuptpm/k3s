@@ -96,7 +96,35 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
+### Run Summary
+- **Run ID**: `41412047309`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41412047309](https://github.com/sajuptpm/k3s/actions/runs/41412047309)
+- **Job ID**: `125167073342`
+- **Trigger**: `workflow_dispatch` (inputs: `mode=native`, `arch=amd64`, `dry_run=true`)
+- **Outcome**: `success` (Completed cleanly in 14s)
+- **Branch**: `main`
+- **Commit**: `c1479aeb9a4959db6a4d7fe99709a318fe32b789`
+
+### Execution Timeline Table
+
+| Step Name | Status | Duration | Notes / Log Evidence |
+|---|---|---|---|
+| **Set up job** | `success` | 2s | Runner image `ubuntu-24.04`, GITHUB_TOKEN read scopes confirmed |
+| **Checkout code** | `success` | 1s | Cloned `sajuptpm/k3s` at commit `c1479ae` via `actions/checkout@v4` |
+| **Resolve Execution Mode** | `success` | 1s | Resolved to `native` mode, selected arch `amd64`, generated summary |
+| **Set up Docker (Original Mode)** | `skipped` | 0s | Correctly bypassed per conditional `steps.mode.outputs.resolved_mode == 'original'` |
+| **Set up Docker Buildx (Original Mode)** | `skipped` | 0s | Correctly bypassed per conditional |
+| **Configure Native Docker & Containerd (Native Mode)** | `success` | 4s | Configured `/etc/docker/daemon.json` with `containerd-snapshotter: true` and restarted docker |
+| **Install Dependencies** | `success` | 3s | Installed `zstd` and `pigz` via `apt-get` |
+| **Create Airgap Package** | `success` | 1s | Validated 8 images from `scripts/airgap/image-list.txt`, generated archives & sha256sum |
+| **Upload Artifacts** | `success` | 2s | Uploaded 4 airgap files as `images-amd64` |
+| **Post Checkout code & Complete job** | `success` | 1s | Cleaned up workspace safe directories |
+
+### Generated Artifacts
+
+| Artifact Name | Artifact ID | Size | Download Link |
+|---|---|---|---|
+| `images-amd64` | `13125543132` | 974 bytes | [Download Artifact 13125543132](https://github.com/sajuptpm/k3s/actions/runs/41412047309/artifacts/13125543132) |
 
 ---
 
