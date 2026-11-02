@@ -95,7 +95,40 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
+### Run Summary
+- **Run ID**: `41414408455`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41414408455](https://github.com/sajuptpm/k3s/actions/runs/41414408455)
+- **Job IDs**:
+  - `build / Build`: `125174645646` (completed in 12s)
+  - `E2E Tests (startup)`: `125176105728` (completed in 19s)
+- **Trigger**: `workflow_dispatch` (inputs: `mode=native`, `etest=startup`, `dtest=none`, `skip_arm64=true`, `dry_run=true`)
+- **Outcome**: `success` (All requested jobs succeeded cleanly)
+- **Branch**: `main`
+- **Commit**: `5d938e326c9ef5b682b14421aa42ca7140f7d5c9`
+
+### Execution Timeline Table
+
+| Job / Step Name | Status | Duration | Notes / Log Evidence |
+|---|---|---|---|
+| **build / Build** | `success` | 12s | Called `build-k3s.yaml` in dry_run mode, produced `k3s-amd64` |
+| **build-arm64** | `skipped` | 0s | Correctly skipped per `inputs.skip_arm64 != true` |
+| **E2E Tests: Set up job** | `success` | 2s | Runner image `ubuntu-24.04`, GITHUB_TOKEN read permissions |
+| **E2E Tests: Checkout & Mode** | `success` | 2s | Cloned repo at `5d938e3` via `actions/checkout@v4`, resolved mode `native` |
+| **E2E Tests: Install Go** | `success` | 3s | Executed resilient `.github/actions/setup-go`, caching prepared |
+| **E2E Tests: Vagrant & Libvirt** | `skipped` | 0s | Correctly bypassed during dry_run to conserve runner time |
+| **E2E Tests: Download k3s binary** | `success` | 2s | Downloaded `k3s-amd64` artifact from `build` job via `actions/download-artifact@v4` |
+| **E2E Tests: Install kubectl** | `success` | 1s | Symlinked and installed binary to `/usr/local/bin/k3s` |
+| **E2E Tests: Run startup Test** | `success` | 1s | Simulated test execution, generated `coverage.out` |
+| **E2E Tests: Codecov upload** | `skipped` | 0s | Safely skipped due to absent `CODECOV_TOKEN` without throwing error |
+| **E2E Tests: Archive Coverage** | `success` | 2s | Uploaded `e2e-startup-coverage` artifact via `actions/upload-artifact@v4` |
+| **E2E Tests: Complete job** | `success` | 6s | Process cleanup and job finalization |
+
+### Generated Artifacts
+
+| Artifact Name | Artifact ID | Size | Download Link |
+|---|---|---|---|
+| `k3s-amd64` | `13127516413` | 442 bytes | [Download Artifact 13127516413](https://github.com/sajuptpm/k3s/actions/runs/41414408455/artifacts/13127516413) |
+| `e2e-startup-coverage` | `13129840305` | 200 bytes | [Download Artifact 13129840305](https://github.com/sajuptpm/k3s/actions/runs/41414408455/artifacts/13129840305) |
 
 ---
 
