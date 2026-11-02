@@ -3,12 +3,51 @@ name: K3s Release
 on:
   push:
     tags:
-    - "v*"
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Execution mode: 'auto' (resolve dynamically), 'native' (GitHub-native release & artifacts), or 'original' (upstream SUSE/Rancher Vault & AWS)"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - native
+          - original
+      tag:
+        description: "Release tag name (e.g., v1.32.4-rc1+k3s1 or v0.0.0-test)"
+        required: false
+        default: "v0.0.0-test"
+        type: string
+      dry_run:
+        description: "Dry run: simulate release process and validate asset bundles without pushing external images/releases"
+        required: false
+        default: true
+        type: boolean
+      push_images:
+        description: "Push container images to registries (only active if dry_run is false)"
+        required: false
+        default: false
+        type: boolean
+      create_release:
+        description: "Create GitHub Release with attached assets (only active if dry_run is false)"
+        required: false
+        default: false
+        type: boolean
+      runner:
+        description: "Runner label (leave empty for vars.RUNNER_LABEL or ubuntu-24.04)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
-  contents: read
-  packages: read
+  contents: write
+  packages: write
   id-token: write
+
+env:
+  RESOLVED_TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || 'v0.0.0-test' }}
 
 jobs:
   build-amd64:
@@ -17,6 +56,8 @@ jobs:
     with:
       platforms: linux/amd64
       upload-build: true
+      dry_run: ${{ inputs.dry_run || false }}
+      runner: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
 
   build-arm:
     name: Build Binary (arm64)
@@ -24,31 +65,82 @@ jobs:
     with:
       platforms: linux/arm64,linux/arm/v7
       upload-build: true
+      dry_run: ${{ inputs.dry_run || false }}
+      runner: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
+
+  build-airgap:
+    name: Airgap Image Tarballs
+    uses: ./.github/workflows/airgap.yaml
+    with:
+      arch: all
+      dry_run: ${{ inputs.dry_run || false }}
+      runner: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
 
   push-release-image:
     name: Build and Push Multi-Arch Image
-    runs-on: ubuntu-24.04
-    permissions: 
+    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
+    permissions:
+      contents: read
       packages: write # Needed to push images to GHCR
       id-token: write
     needs: [build-amd64, build-arm]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Resolve Execution Mode
+        id: mode
+        shell: bash
+        run: |
+          REQUESTED_MODE="${{ inputs.mode || 'auto' }}"
+          echo "Requested mode: $REQUESTED_MODE"
+          if [ "$REQUESTED_MODE" = "auto" ]; then
+            if [ "${{ github.repository_owner }}" = "k3s-io" ]; then
+              RESOLVED_MODE="original"
+            else
+              RESOLVED_MODE="native"
+            fi
+          else
+            RESOLVED_MODE="$REQUESTED_MODE"
+          fi
+          echo "resolved_mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
+          echo "### Release Image Build Mode" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: \`$RESOLVED_MODE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Release Tag: \`${{ env.RESOLVED_TAG }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Dry Run: \`${{ inputs.dry_run || false }}\`" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Set up Docker
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker (Original Mode)
+        if: steps.mode.outputs.resolved_mode == 'original'
         uses: docker/setup-docker-action@77e84dbf09b47d1e29270283c22f16145aa85ca1 # v5.4.0
         with:
           version: type=image,tag=29
           daemon-config: '{"features":{"containerd-snapshotter":true}}'
           set-host: true
 
+      - name: Configure Native Docker & Containerd (Native Mode)
+        if: steps.mode.outputs.resolved_mode == 'native'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Configuring runner native Docker daemon..."
+          sudo mkdir -p /etc/docker
+          sudo bash -c 'cat <<EOF > /etc/docker/daemon.json
+          {
+            "features": {
+              "containerd-snapshotter": true
+            }
+          }
+          EOF'
+          sudo systemctl daemon-reload
+          sudo systemctl restart docker
+          docker info
+
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        uses: docker/setup-buildx-action@v3
 
       - name: Read registry secrets (staging)
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
-        if: ${{ github.repository_owner == 'k3s-io' }}
+        if: steps.mode.outputs.resolved_mode == 'original' && github.repository_owner == 'k3s-io'
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/k3s-suse-registry-stg/credentials registry | STAGING_REGISTRY ;
@@ -57,7 +149,7 @@ jobs:
 
       - name: Read registry secrets (prime)
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
-        if: ${{ !contains(github.ref_name, '-rc') && github.repository_owner == 'k3s-io' }}
+        if: steps.mode.outputs.resolved_mode == 'original' && !contains(env.RESOLVED_TAG, '-rc') && github.repository_owner == 'k3s-io'
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/k3s-suse-registry/credentials registry | REGISTRY ;
@@ -65,46 +157,48 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/k3s-suse-registry/credentials password | REGISTRY_PASSWORD
 
       - name: "Read Vault secrets"
-        if: github.repository_owner == 'k3s-io'
+        if: steps.mode.outputs.resolved_mode == 'original' && github.repository_owner == 'k3s-io'
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials password | DOCKER_TOKEN ;
-    
+
       - name: Login to DockerHub with Rancher Secrets
-        if: github.repository_owner == 'k3s-io'
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        if: steps.mode.outputs.resolved_mode == 'original' && github.repository_owner == 'k3s-io' && env.DOCKER_USERNAME != ''
+        uses: docker/login-action@v3
         with:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_TOKEN }}
 
       # For forks, setup DockerHub login with GHA secrets
       - name: Login to DockerHub with GHA Secrets
-        if: github.repository_owner != 'k3s-io'
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        if: steps.mode.outputs.resolved_mode == 'native' && env.DOCKER_HAS_SECRET == 'true'
+        env:
+          DOCKER_HAS_SECRET: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_TOKEN != '' }}
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Login to Staging Registry
-        if: github.repository_owner == 'k3s-io'
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        if: steps.mode.outputs.resolved_mode == 'original' && github.repository_owner == 'k3s-io' && env.STAGING_REGISTRY != ''
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.STAGING_REGISTRY }}
           username: ${{ env.STAGING_REGISTRY_USERNAME }}
           password: ${{ env.STAGING_REGISTRY_PASSWORD }}
 
       - name: Login to Prime Registry
-        if: ${{ !contains(github.ref_name, '-rc') && github.repository_owner == 'k3s-io' }}
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        if: steps.mode.outputs.resolved_mode == 'original' && !contains(env.RESOLVED_TAG, '-rc') && github.repository_owner == 'k3s-io' && env.REGISTRY != ''
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ env.REGISTRY_USERNAME }}
           password: ${{ env.REGISTRY_PASSWORD }}
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -112,11 +206,11 @@ jobs:
 
       - name: Configure image tags
         id: tag_config
+        shell: bash
         run: |
-          TAG=${GITHUB_REF#refs/tags/}
-          
+          TAG="${RESOLVED_TAG}"
           # Base configuration - always transform the main tag
-          # Transforms v1.32.4-rc1+k3s1 → v1.32.4-rc1-k3s1
+          # Transforms v1.32.4-rc1+k3s1 -> v1.32.4-rc1-k3s1
           BASE_CONFIG="type=raw,value=${TAG//+/-}"
           
           if [[ "${TAG,,}" == *"rc"* ]]; then
@@ -129,152 +223,230 @@ jobs:
           fi
 
       - name: Set DockerHub Org
+        shell: bash
         run: |
           if [ "${{ github.repository_owner }}" == "k3s-io" ]; then
             echo "DOCKERHUB_ORG=rancher" >> $GITHUB_ENV
-          else
+          elif [ -n "${{ secrets.DOCKER_USERNAME }}" ]; then
             echo "DOCKERHUB_ORG=${{ secrets.DOCKER_USERNAME }}" >> $GITHUB_ENV
+          else
+            echo "DOCKERHUB_ORG=${{ github.repository_owner }}" >> $GITHUB_ENV
           fi
 
       - name: Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        uses: docker/metadata-action@v5
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/k3s
-            docker.io/${{ env.DOCKERHUB_ORG }}/k3s
-            name=${{ env.REGISTRY }}/rancher/k3s,enable=${{ !contains(github.ref_name, '-rc') && github.repository_owner == 'k3s-io' }}
-            name=${{ env.STAGING_REGISTRY }}/rancher/k3s,enable=${{ github.repository_owner == 'k3s-io' }}
+            ${{ secrets.DOCKER_USERNAME != '' && format('docker.io/{0}/k3s', env.DOCKERHUB_ORG) || '' }}
+            name=${{ env.REGISTRY }}/rancher/k3s,enable=${{ !contains(env.RESOLVED_TAG, '-rc') && steps.mode.outputs.resolved_mode == 'original' && github.repository_owner == 'k3s-io' && env.REGISTRY != '' }}
+            name=${{ env.STAGING_REGISTRY }}/rancher/k3s,enable=${{ steps.mode.outputs.resolved_mode == 'original' && github.repository_owner == 'k3s-io' && env.STAGING_REGISTRY != '' }}
           flavor: latest=false
           tags: ${{ steps.tag_config.outputs.tag_spec }}
-      
+
       - name: "Download K3s build"
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@v4
         with:
           pattern: k3s*
           path: ./dist/artifacts
           merge-multiple: true
 
       - name: Prepare build folder
+        shell: bash
         run: |
           mkdir -p ./build/out
-          cp ./dist/artifacts/data-* ./build/out
+          if ls ./dist/artifacts/data-* 1> /dev/null 2>&1; then
+            cp ./dist/artifacts/data-* ./build/out/
+          fi
 
       - name: Build and push K3s runtime image
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        if: inputs.dry_run != true
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./package/Dockerfile
           platforms: linux/amd64,linux/arm64,linux/arm/v7
-          push: true
+          push: ${{ inputs.push_images == true }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            TAG=${{ github.ref_name }}
+            TAG=${{ env.RESOLVED_TAG }}
 
-  build-airgap:
-    name: Airgap Image Tarballs
-    uses: ./.github/workflows/airgap.yaml
+      - name: Validate Container Image Metadata (Dry Run)
+        if: inputs.dry_run == true
+        shell: bash
+        run: |
+          echo "Dry run: image build and push simulated."
+          echo "Target tags to be generated:"
+          echo "${{ steps.meta.outputs.tags }}"
+          echo "Target labels:"
+          echo "${{ steps.meta.outputs.labels }}"
+          echo "### Release Image Metadata Validated (Dry Run)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Image tags: \`${{ steps.meta.outputs.tags }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Image labels: \`${{ steps.meta.outputs.labels }}\`" >> "$GITHUB_STEP_SUMMARY"
 
   upload-release-assets:
     name: Prepare and Upload Release Assets
-    permissions: 
+    permissions:
       contents: write # Needed to update release with assets
       id-token: write
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     needs: [build-amd64, build-arm, build-airgap]
     steps:
-    - name: Checkout code
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-    - name: Read Prime artifacts secrets
-      uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
-      if: ${{ github.repository_owner == 'k3s-io' }}
-      with:
-        secrets: |
-          secret/data/github/repo/${{ github.repository }}/prime-artifacts-uploader/credentials accessKeyId | AWS_ACCESS_KEY_ID ;
-          secret/data/github/repo/${{ github.repository }}/prime-artifacts-uploader/credentials secretAccessKey | AWS_SECRET_ACCESS_KEY ;
-          secret/data/github/repo/${{ github.repository }}/prime-artifacts-uploader/credentials primeArtifactsBucketName | PRIME_ARTIFACTS_BUCKET_NAME
-
-    - name: Read registry secrets (staging)
-      uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
-      if: ${{ contains(github.ref_name, '-rc') && github.repository_owner == 'k3s-io' }}
-      with:
-        secrets: |
-          secret/data/github/repo/${{ github.repository }}/k3s-suse-registry-stg/credentials registry | REGISTRY
-
-    - name: Read registry secrets (prime)
-      uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
-      if: ${{ !contains(github.ref_name, '-rc') && github.repository_owner == 'k3s-io' }}
-      with:
-        secrets: |
-          secret/data/github/repo/${{ github.repository }}/k3s-suse-registry/credentials registry | REGISTRY
-
-    - name: Configure AWS Credentials (s3)
-      uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6
-      if: ${{ github.repository_owner == 'k3s-io' }}
-      with:
-        aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
-
-    - name: "Download Artifacts"
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-      with:
-        pattern: "*"
-        path: ./dist/artifacts
-        merge-multiple: true
-    
-    - name: "Combine and format sha256sum files"
-      run: |
-        cp scripts/airgap/image-list.txt dist/artifacts/k3s-images.txt
-        for ARCH in amd64 arm64 arm; do
-          OUTPUT_FILE="./dist/artifacts/sha256sum-${ARCH}.txt"
-          cat ./dist/artifacts/k3s-airgap-images-${ARCH}*.sha256sum >> "${OUTPUT_FILE}"
-          rm ./dist/artifacts/k3s-airgap-images-${ARCH}*.sha256sum # Remove the original file to avoid uploading it
-          if [[ "${ARCH}" == "amd64" ]]; then
-            cat ./dist/artifacts/k3s.sha256sum >> "${OUTPUT_FILE}"
-            rm ./dist/artifacts/k3s.sha256sum # Remove the original file to avoid uploading it
+      - name: Resolve Execution Mode
+        id: mode
+        shell: bash
+        run: |
+          REQUESTED_MODE="${{ inputs.mode || 'auto' }}"
+          if [ "$REQUESTED_MODE" = "auto" ]; then
+            if [ "${{ github.repository_owner }}" = "k3s-io" ]; then
+              RESOLVED_MODE="original"
+            else
+              RESOLVED_MODE="native"
+            fi
           else
-            cat ./dist/artifacts/k3s-${ARCH}.sha256sum >> "${OUTPUT_FILE}"
-            rm ./dist/artifacts/k3s-${ARCH}.sha256sum # Remove the original file to avoid uploading it
+            RESOLVED_MODE="$REQUESTED_MODE"
           fi
-        done
+          echo "resolved_mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
+          echo "### Release Assets Mode" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: \`$RESOLVED_MODE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Release Tag: \`${{ env.RESOLVED_TAG }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Dry Run: \`${{ inputs.dry_run || false }}\`" >> "$GITHUB_STEP_SUMMARY"
 
-    - name: Validate Assets for Release
-      run: |
-        ./scripts/validate-artifacts
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Create Pre-Release with Assets
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: gh release create -R "${GITHUB_REPOSITORY}" --prerelease --generate-notes "${GITHUB_REF_NAME}" "${GITHUB_WORKSPACE}"/dist/artifacts/k3s* "${GITHUB_WORKSPACE}"/dist/artifacts/sha256sum*
+      - name: Read Prime artifacts secrets
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        if: steps.mode.outputs.resolved_mode == 'original' && github.repository_owner == 'k3s-io'
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/prime-artifacts-uploader/credentials accessKeyId | AWS_ACCESS_KEY_ID ;
+            secret/data/github/repo/${{ github.repository }}/prime-artifacts-uploader/credentials secretAccessKey | AWS_SECRET_ACCESS_KEY ;
+            secret/data/github/repo/${{ github.repository }}/prime-artifacts-uploader/credentials primeArtifactsBucketName | PRIME_ARTIFACTS_BUCKET_NAME
 
-    - name: Update Image Registry for Prime/Staging
-      if: ${{ github.repository_owner == 'k3s-io' }}
-      env:
-        REGISTRY: ${{ env.REGISTRY }}
-      run: sed -i "s|docker.io|${REGISTRY}|g" dist/artifacts/k3s-images.txt
+      - name: Read registry secrets (staging)
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        if: steps.mode.outputs.resolved_mode == 'original' && contains(env.RESOLVED_TAG, '-rc') && github.repository_owner == 'k3s-io'
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/k3s-suse-registry-stg/credentials registry | REGISTRY
 
-    - name: Upload Assets to S3
-      if: ${{ github.repository_owner == 'k3s-io' }}
-      env:
-        BUCKET: ${{ env.PRIME_ARTIFACTS_BUCKET_NAME }}
-      run: |
-        S3_PATH="s3://${BUCKET}/k3s/${GITHUB_REF_NAME}"
-        aws s3 sync dist/artifacts/ "$S3_PATH" --quiet --no-progress --exclude "*" --include "k3s*" --include "sha256sum*"
+      - name: Read registry secrets (prime)
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        if: steps.mode.outputs.resolved_mode == 'original' && !contains(env.RESOLVED_TAG, '-rc') && github.repository_owner == 'k3s-io'
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/k3s-suse-registry/credentials registry | REGISTRY
+
+      - name: Configure AWS Credentials (s3)
+        uses: aws-actions/configure-aws-credentials@v4
+        if: steps.mode.outputs.resolved_mode == 'original' && github.repository_owner == 'k3s-io' && env.AWS_ACCESS_KEY_ID != ''
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: "Download Artifacts"
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*"
+          path: ./dist/artifacts
+          merge-multiple: true
+
+      - name: "Combine and format sha256sum files"
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp scripts/airgap/image-list.txt dist/artifacts/k3s-images.txt
+          for ARCH in amd64 arm64 arm; do
+            OUTPUT_FILE="./dist/artifacts/sha256sum-${ARCH}.txt"
+            cat ./dist/artifacts/k3s-airgap-images-${ARCH}*.sha256sum >> "${OUTPUT_FILE}"
+            rm ./dist/artifacts/k3s-airgap-images-${ARCH}*.sha256sum
+            if [[ "${ARCH}" == "amd64" ]]; then
+              cat ./dist/artifacts/k3s.sha256sum >> "${OUTPUT_FILE}"
+              rm ./dist/artifacts/k3s.sha256sum
+            else
+              cat ./dist/artifacts/k3s-${ARCH}.sha256sum >> "${OUTPUT_FILE}"
+              rm ./dist/artifacts/k3s-${ARCH}.sha256sum
+            fi
+          done
+
+      - name: Validate Assets for Release
+        shell: bash
+        run: |
+          ./scripts/validate-artifacts
+
+      - name: Create Pre-Release with Assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ env.RESOLVED_TAG }}
+        run: |
+          set -euo pipefail
+          echo "Target Release Tag: ${RELEASE_TAG}"
+          if [ "${{ inputs.create_release || false }}" = "true" ] && [ "${{ inputs.dry_run || false }}" != "true" ]; then
+            echo "Creating GitHub pre-release with attached assets..."
+            gh release create -R "${GITHUB_REPOSITORY}" --prerelease --generate-notes "${RELEASE_TAG}" "${GITHUB_WORKSPACE}"/dist/artifacts/k3s* "${GITHUB_WORKSPACE}"/dist/artifacts/sha256sum*
+          else
+            echo "Dry run / validation mode active: release publishing simulated."
+            echo "### Validated Release Assets" >> "$GITHUB_STEP_SUMMARY"
+            echo "| File | Size |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+            for f in "${GITHUB_WORKSPACE}"/dist/artifacts/k3s* "${GITHUB_WORKSPACE}"/dist/artifacts/sha256sum*; do
+              if [ -f "$f" ]; then
+                echo "| $(basename "$f") | $(wc -c < "$f") bytes |" >> "$GITHUB_STEP_SUMMARY"
+              fi
+            done
+          fi
+
+      - name: Upload Release Assets Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ env.RESOLVED_TAG }}
+          path: |
+            dist/artifacts/k3s*
+            dist/artifacts/sha256sum*
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Update Image Registry for Prime/Staging
+        if: steps.mode.outputs.resolved_mode == 'original' && github.repository_owner == 'k3s-io' && env.REGISTRY != ''
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+        run: sed -i "s|docker.io|${REGISTRY}|g" dist/artifacts/k3s-images.txt
+
+      - name: Upload Assets to S3
+        if: steps.mode.outputs.resolved_mode == 'original' && github.repository_owner == 'k3s-io' && env.PRIME_ARTIFACTS_BUCKET_NAME != ''
+        env:
+          BUCKET: ${{ env.PRIME_ARTIFACTS_BUCKET_NAME }}
+        run: |
+          S3_PATH="s3://${BUCKET}/k3s/${RESOLVED_TAG}"
+          aws s3 sync dist/artifacts/ "$S3_PATH" --quiet --no-progress --exclude "*" --include "k3s*" --include "sha256sum*"
 
   dispatch-k3s-upgrade:
     name: Dispatch k3s-upgrade Workflow
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     needs: [upload-release-assets]
     steps:
       - name: Dispatch k3s-upgrade Workflow
+        shell: bash
+        env:
+          UPGRADE_PAT: ${{ secrets.K3S_UPGRADE_PAT }}
+          RELEASE_TAG: ${{ env.RESOLVED_TAG }}
         run: |
-          curl -L -XPOST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.K3S_UPGRADE_PAT }}" \
-            -H "Content-Type: application/json" \
-            https://api.github.com/repos/${{ github.repository_owner }}/k3s-upgrade/dispatches \
-            -d '{"event_type":"tag-release","client_payload":{"tag":"${{ github.ref_name }}"}}'
-
+          set -euo pipefail
+          if [ -n "${UPGRADE_PAT}" ] && [ "${{ inputs.dry_run || false }}" != "true" ]; then
+            echo "Dispatching downstream k3s-upgrade repository workflow..."
+            curl -L -XPOST \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${UPGRADE_PAT}" \
+              -H "Content-Type: application/json" \
+              https://api.github.com/repos/${{ github.repository_owner }}/k3s-upgrade/dispatches \
+              -d "{\"event_type\":\"tag-release\",\"client_payload\":{\"tag\":\"${RELEASE_TAG}\"}}"
+          else
+            echo "Downstream upgrade dispatch skipped (PAT not configured or dry-run enabled)."
+            echo "### Downstream Upgrade Status" >> "$GITHUB_STEP_SUMMARY"
+            echo "Downstream \`k3s-upgrade\` repository dispatch simulated or skipped cleanly (Native Mode / Dry Run active)." >> "$GITHUB_STEP_SUMMARY"
+          fi

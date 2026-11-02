@@ -12,6 +12,16 @@ on:
         required: false
         default: "amd64"
         type: string
+      dry_run:
+        description: "Dry run: validate image lists and create lightweight mock artifacts"
+        required: false
+        default: false
+        type: boolean
+      runner:
+        description: "Custom runner label"
+        required: false
+        default: ""
+        type: string
   workflow_dispatch:
     inputs:
       mode:
