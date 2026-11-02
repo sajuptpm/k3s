@@ -5,7 +5,44 @@ on:
       - "scripts/package-airgap"
       - "scripts/airgap/image-list.txt"
       - ".github/workflows/airgap.yaml"
-  workflow_call: {}
+  workflow_call:
+    inputs:
+      arch:
+        description: "Target architecture ('all', 'amd64', 'arm64', 'arm')"
+        required: false
+        default: "amd64"
+        type: string
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Execution mode: 'auto' (resolve dynamically), 'native' (GitHub-native runner Docker/containerd), or 'original' (upstream setup-docker-action)"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - native
+          - original
+      arch:
+        description: "Target architecture to build"
+        required: false
+        default: "amd64"
+        type: choice
+        options:
+          - amd64
+          - arm64
+          - arm
+          - all
+      runner:
+        description: "Custom runner label (leave empty for vars.RUNNER_LABEL or ubuntu-24.04)"
+        required: false
+        default: ""
+        type: string
+      dry_run:
+        description: "Dry run: validate image lists and create lightweight mock artifacts"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -13,37 +50,94 @@ permissions:
 jobs:
   build-airgap:
     name: Export Images (${{ matrix.arch }})
-    runs-on: ubuntu-24.04 # Runs on standard runner, docker pulls with --platform
+    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     strategy:
+      fail-fast: false
       matrix:
-        arch: [amd64, arm64, arm]
+        arch: ${{ (inputs.arch == 'amd64' && fromJSON('["amd64"]')) || (inputs.arch == 'arm64' && fromJSON('["arm64"]')) || (inputs.arch == 'arm' && fromJSON('["arm"]')) || fromJSON('["amd64", "arm64", "arm"]') }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@v4
 
-      - name: Set up Docker
+      - name: Resolve Execution Mode
+        id: mode
+        shell: bash
+        run: |
+          REQUESTED_MODE="${{ inputs.mode || 'auto' }}"
+          echo "Requested mode: $REQUESTED_MODE"
+          if [ "$REQUESTED_MODE" = "auto" ]; then
+            RESOLVED_MODE="native"
+          else
+            RESOLVED_MODE="$REQUESTED_MODE"
+          fi
+          echo "resolved_mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
+          echo "### Airgap Workflow Execution" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: \`$RESOLVED_MODE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Architecture: \`${{ matrix.arch }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Dry Run: \`${{ inputs.dry_run || false }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Docker (Original Mode)
+        if: steps.mode.outputs.resolved_mode == 'original'
         uses: docker/setup-docker-action@77e84dbf09b47d1e29270283c22f16145aa85ca1 # v5.4.0
         with:
           version: type=image,tag=29
           daemon-config: '{"features":{"containerd-snapshotter":true}}'
           set-host: true
- 
-      - name: Set up Docker Buildx
+
+      - name: Set up Docker Buildx (Original Mode)
+        if: steps.mode.outputs.resolved_mode == 'original'
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
+      - name: Configure Native Docker & Containerd (Native Mode)
+        if: steps.mode.outputs.resolved_mode == 'native'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Configuring pre-installed runner Docker daemon with containerd snapshotter..."
+          sudo mkdir -p /etc/docker
+          sudo bash -c 'cat <<EOF > /etc/docker/daemon.json
+          {
+            "features": {
+              "containerd-snapshotter": true
+            }
+          }
+          EOF'
+          sudo systemctl daemon-reload
+          sudo systemctl restart docker
+          docker info
+
       - name: Install Dependencies
+        shell: bash
         run: sudo apt-get update -y && sudo apt-get install -y zstd pigz
 
       - name: Create Airgap Package
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p ./dist/artifacts
-          export CONTAINERD_ADDRESS=$(docker info --format '{{.Containerd.Address}}')
-          sudo chgrp $(id -g) $CONTAINERD_ADDRESS $(dirname $CONTAINERD_ADDRESS)
-          ./scripts/package-airgap ${{ matrix.arch }}
+          if [ "${{ inputs.dry_run || false }}" = "true" ]; then
+            echo "Dry run enabled: validating image list syntax and generating mock airgap packages..."
+            test -f scripts/airgap/image-list.txt
+            while IFS= read -r img || [ -n "$img" ]; do
+              echo "Validating image reference: $img"
+              [[ "$img" =~ ^[a-zA-Z0-9._/-]+(:[a-zA-Z0-9._-]+)?$ ]] || { echo "Invalid image ref: $img"; exit 1; }
+            done < scripts/airgap/image-list.txt
+            echo "Mock airgap image archive for ${{ matrix.arch }}" > ./dist/artifacts/k3s-airgap-images-${{ matrix.arch }}.tar
+            zstd -16 -f ./dist/artifacts/k3s-airgap-images-${{ matrix.arch }}.tar -o ./dist/artifacts/k3s-airgap-images-${{ matrix.arch }}.tar.zst
+            pigz -c ./dist/artifacts/k3s-airgap-images-${{ matrix.arch }}.tar > ./dist/artifacts/k3s-airgap-images-${{ matrix.arch }}.tar.gz
+            cd ./dist/artifacts
+            sha256sum k3s-airgap-images-${{ matrix.arch }}.tar* > k3s-airgap-images-${{ matrix.arch }}.sha256sum
+            cd -
+          else
+            export CONTAINERD_ADDRESS=$(docker info --format '{{.Containerd.Address}}')
+            sudo chgrp $(id -g) $CONTAINERD_ADDRESS $(dirname $CONTAINERD_ADDRESS)
+            ./scripts/package-airgap ${{ matrix.arch }}
+          fi
+          ls -lah ./dist/artifacts/
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@v4
         with:
           name: images-${{ matrix.arch }}
           path: dist/artifacts/k3s-airgap-images-${{ matrix.arch }}.*
