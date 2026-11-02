@@ -89,18 +89,16 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
-
-- **Run ID**: Pending
-- **Run URL**: Pending
+- **Run ID**: `41427017763`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41427017763](https://github.com/sajuptpm/k3s/actions/runs/41427017763)
 - **Trigger**: `workflow_dispatch` (`mode=native`, `dry_run=true`, `branch=main`)
-- **Outcome**: Pending
+- **Outcome**: **SUCCESS** (All jobs succeeded in 3m33s, Updatecli pipeline diff evaluated, step summary published)
 
 ### Execution Timeline
 | Job | Status | Duration | Artifacts Produced |
 | :--- | :--- | :--- | :--- |
-| `cleanup-branches` | Pending | - | Cleaned branches |
-| `updatecli (main)` | Pending | - | Step Summary Diff Report |
+| `cleanup-branches` (`Cleanup Leftover Branches`) | **Success** | 3s | Branch cleanup evaluated |
+| `updatecli (main)` (`Update Dependencies (main)`) | **Success** | 3m30s | Step Summary Markdown Diff Report |
 
 ---
 

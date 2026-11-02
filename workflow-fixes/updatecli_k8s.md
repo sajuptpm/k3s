@@ -83,17 +83,15 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
-
-- **Run ID**: Pending
-- **Run URL**: Pending
+- **Run ID**: `41427781466`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41427781466](https://github.com/sajuptpm/k3s/actions/runs/41427781466)
 - **Trigger**: `workflow_dispatch` (`mode=native`, `dry_run=true`, `branch=main`)
-- **Outcome**: Pending
+- **Outcome**: **SUCCESS** (Updatecli k8s dependency evaluation succeeded in 8m1s, step summary rendered)
 
 ### Execution Timeline
 | Job | Status | Duration | Artifacts Produced |
 | :--- | :--- | :--- | :--- |
-| `updatecli (main)` | Pending | - | Step Summary Diff Report |
+| `updatecli (main)` (`Bump K8s Dependencies (main)`) | **Success** | 8m1s | Step Summary Markdown Diff Report |
 
 ---
 
