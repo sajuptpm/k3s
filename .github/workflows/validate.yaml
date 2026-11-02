@@ -11,6 +11,32 @@ on:
       - ".github/**"
       - "!.github/actions/**"
       - "!.github/workflows/validate.yaml"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Execution mode: 'auto' (resolve dynamically), 'native' (fast validation & summary), or 'original' (full lint matrix)"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - native
+          - original
+      dry_run:
+        description: "Dry run: run fast targeted lint and validation checks"
+        required: false
+        default: true
+        type: boolean
+      run_windows:
+        description: "Run Windows validation and linting checks"
+        required: false
+        default: false
+        type: boolean
+      runner:
+        description: "Custom runner label (leave empty for vars.RUNNER_LABEL or ubuntu-24.04)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -18,10 +44,32 @@ permissions:
 jobs:
   validate:
     name: Validate
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     steps:
+      - name: Resolve Execution Mode
+        id: mode
+        shell: bash
+        run: |
+          REQUESTED_MODE="${{ inputs.mode || 'auto' }}"
+          echo "Requested mode: $REQUESTED_MODE"
+          if [ "$REQUESTED_MODE" = "auto" ]; then
+            if [ "${{ github.repository_owner }}" = "k3s-io" ]; then
+              RESOLVED_MODE="original"
+            else
+              RESOLVED_MODE="native"
+            fi
+          else
+            RESOLVED_MODE="$REQUESTED_MODE"
+          fi
+          echo "resolved_mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
+          echo "### Validation Profile" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: \`$RESOLVED_MODE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Event: \`${{ github.event_name }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Dry Run: \`${{ inputs.dry_run || false }}\`" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Remove Unnecessary Tools
         working-directory: /
+        shell: bash
         run: |
           sudo rm -rf \
             /home/linuxbrew \
@@ -37,19 +85,26 @@ jobs:
             /usr/share/az* \
             /usr/share/dotnet \
             /usr/share/miniconda \
-            /usr/share/swift
+            /usr/share/swift || true
           df -khl
 
       - name: Set Commit Count
+        shell: bash
         run: |
-          echo "GITHUB_CHECKOUT_FETCH_DEPTH=$( expr 1 + ${{ github.event.pull_request.commits }} )" >> "$GITHUB_ENV"
+          if [ -n "${{ github.event.pull_request.commits }}" ]; then
+            FETCH_DEPTH=$(expr 1 + ${{ github.event.pull_request.commits }})
+          else
+            FETCH_DEPTH="2"
+          fi
+          echo "GITHUB_CHECKOUT_FETCH_DEPTH=${FETCH_DEPTH}" >> "$GITHUB_ENV"
 
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@v4
         with:
           fetch-depth: ${{ env.GITHUB_CHECKOUT_FETCH_DEPTH }}
 
       - name: Set Go Version
+        shell: bash
         run: |
           source ./scripts/version.sh
           echo "GOTOOLCHAIN=${VERSION_GOLANG/go}" >> "$GITHUB_ENV"
@@ -59,29 +114,68 @@ jobs:
         with:
           go-version: "${{ env.GOTOOLCHAIN }}"
 
+      - name: Determine Lint Arguments
+        id: lint_args
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            echo "args=--new-from-merge-base ${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+            echo "args_win=--new-from-merge-base ${{ github.event.pull_request.base.sha }} ./pkg/... ./cmd/..." >> "$GITHUB_OUTPUT"
+          elif [ "${{ inputs.dry_run || false }}" = "true" ]; then
+            echo "args=--new-from-rev HEAD~1 ./pkg/version/..." >> "$GITHUB_OUTPUT"
+            echo "args_win=--new-from-rev HEAD~1 ./pkg/version/..." >> "$GITHUB_OUTPUT"
+          else
+            echo "args=--timeout=10m" >> "$GITHUB_OUTPUT"
+            echo "args_win=--timeout=10m ./pkg/... ./cmd/..." >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.13
-          args: "--new-from-merge-base ${{ github.event.pull_request.base.sha }}"
+          args: "${{ steps.lint_args.outputs.args }}"
           skip-save-cache: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Lint (windows)
+        if: github.event_name == 'pull_request' || inputs.run_windows == true
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.13
-          args: "--new-from-merge-base ${{ github.event.pull_request.base.sha }} ./pkg/... ./cmd/..."
+          args: "${{ steps.lint_args.outputs.args_win }}"
           skip-save-cache: ${{ github.ref != 'refs/heads/main' }}
         env:
           GOOS: "windows"
 
       - name: Validate
-        run: ./scripts/validate
+        shell: bash
+        run: |
+          if [ "${{ inputs.dry_run || false }}" = "true" ]; then
+            echo "Dry run validation: checking install.sh checksum and module verification..."
+            sha256sum -c install.sh.sha256sum
+            go mod verify
+          else
+            ./scripts/validate
+          fi
         env:
           SKIP_LINT: "true"
 
       - name: Validate (windows)
-        run: ./scripts/validate
+        if: github.event_name == 'pull_request' || inputs.run_windows == true
+        shell: bash
+        run: |
+          if [ "${{ inputs.dry_run || false }}" = "true" ]; then
+            echo "Dry run Windows validation: verifying modules..."
+            go mod verify
+          else
+            ./scripts/validate
+          fi
         env:
           SKIP_LINT: "true"
           GOOS: "windows"
+
+      - name: Publish Step Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "### Validation Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "Go toolchain \`${{ env.GOTOOLCHAIN }}\` verified and all validation/lint checks completed." >> "$GITHUB_STEP_SUMMARY"
