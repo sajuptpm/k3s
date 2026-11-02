@@ -4,51 +4,113 @@ on:
   schedule:
     # Runs at 06 PM UTC
     - cron: '0 18 * * *'
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Execution mode: 'auto' (resolve dynamically), 'native' (dry-run diff & summary), or 'original' (live apply & PR creation)"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - native
+          - original
+      branch:
+        description: "Target branch to update ('main', 'release-1.37', 'release-1.36', 'release-1.35', 'release-1.34', or 'all')"
+        required: false
+        default: "main"
+        type: choice
+        options:
+          - main
+          - release-1.37
+          - release-1.36
+          - release-1.35
+          - release-1.34
+          - all
+      dry_run:
+        description: "Dry run: run Updatecli diff instead of apply (no PRs or commits created)"
+        required: false
+        default: true
+        type: boolean
+      runner:
+        description: "Custom runner label (leave empty for vars.RUNNER_LABEL or ubuntu-24.04)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   cleanup-branches:
-    runs-on: ubuntu-24.04
+    name: Cleanup Leftover Branches
+    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     permissions:
       contents: write
       pull-requests: read
     steps:
       - name: Delete leftover UpdateCLI branches
-        run: |
-          gh pr list --search "is:closed is:pr head:updatecli_" --json headRefName --jq ".[].headRefName" | sort -u > closed_prs_branches.txt
-          gh pr list --search "is:open is:pr head:updatecli_" --json headRefName --jq ".[].headRefName" | sort -u > open_prs_branches.txt
-          for branch in $(comm -23 closed_prs_branches.txt open_prs_branches.txt); do if (git ls-remote --exit-code --heads origin "$branch"); then echo "Deleting leftover UpdateCLI branch - $branch"; git push origin --delete "$branch"; fi done
+        shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.UPDATECLI_BOT_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Scanning for leftover closed Updatecli PR branches..."
+          gh pr list --search "is:closed is:pr head:updatecli_" --json headRefName --jq ".[].headRefName" | sort -u > closed_prs_branches.txt || touch closed_prs_branches.txt
+          gh pr list --search "is:open is:pr head:updatecli_" --json headRefName --jq ".[].headRefName" | sort -u > open_prs_branches.txt || touch open_prs_branches.txt
+          for branch in $(comm -23 closed_prs_branches.txt open_prs_branches.txt); do
+            if git ls-remote --exit-code --heads origin "$branch" > /dev/null 2>&1; then
+              echo "Deleting leftover UpdateCLI branch - $branch"
+              git push origin --delete "$branch" || true
+            fi
+          done
+
   updatecli:
-    runs-on: ubuntu-24.04
+    name: Update Dependencies (${{ matrix.branch }})
+    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     needs: cleanup-branches
     permissions:
       contents: write
       issues: write
       pull-requests: write
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - branch: main
-            helm_controller_pattern: "*"
-          - branch: release-1.37
-            helm_controller_pattern: "~0.17"
-          - branch: release-1.36
-            helm_controller_pattern: "~0.17"
-          - branch: release-1.35
-            helm_controller_pattern: "~0.17"
-          - branch: release-1.34
-            helm_controller_pattern: "~0.16"
+        include: ${{ (inputs.branch == 'main' && fromJSON('[{"branch":"main","helm_controller_pattern":"*"}]')) || (inputs.branch == 'release-1.37' && fromJSON('[{"branch":"release-1.37","helm_controller_pattern":"~0.17"}]')) || (inputs.branch == 'release-1.36' && fromJSON('[{"branch":"release-1.36","helm_controller_pattern":"~0.17"}]')) || (inputs.branch == 'release-1.35' && fromJSON('[{"branch":"release-1.35","helm_controller_pattern":"~0.17"}]')) || (inputs.branch == 'release-1.34' && fromJSON('[{"branch":"release-1.34","helm_controller_pattern":"~0.16"}]')) || fromJSON('[{"branch":"main","helm_controller_pattern":"*"},{"branch":"release-1.37","helm_controller_pattern":"~0.17"},{"branch":"release-1.36","helm_controller_pattern":"~0.17"},{"branch":"release-1.35","helm_controller_pattern":"~0.17"},{"branch":"release-1.34","helm_controller_pattern":"~0.16"}]') }}
     steps:
+      - name: Resolve Execution Mode
+        id: mode
+        shell: bash
+        run: |
+          REQUESTED_MODE="${{ inputs.mode || 'auto' }}"
+          echo "Requested mode: $REQUESTED_MODE"
+          if [ "$REQUESTED_MODE" = "auto" ]; then
+            if [ "${{ github.repository_owner }}" = "k3s-io" ] && [ "${{ github.event_name }}" = "schedule" ]; then
+              RESOLVED_MODE="original"
+            else
+              RESOLVED_MODE="native"
+            fi
+          else
+            RESOLVED_MODE="$REQUESTED_MODE"
+          fi
+          
+          if [ "$RESOLVED_MODE" = "native" ] || [ "${{ inputs.dry_run || false }}" = "true" ]; then
+            COMMAND="diff"
+          else
+            COMMAND="apply"
+          fi
+          
+          echo "resolved_mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
+          echo "command=$COMMAND" >> "$GITHUB_OUTPUT"
+          
+          echo "### Updatecli Profile" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: \`$RESOLVED_MODE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Action: \`updatecli pipeline $COMMAND\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Target Branch: \`${{ matrix.branch }}\`" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@v4
 
       - name: Install Go
         uses: ./.github/actions/setup-go
@@ -56,13 +118,34 @@ jobs:
       - name: Install Updatecli
         uses: updatecli/updatecli-action@41b9c8d707830a9daebaeaa84c1b62d60b779564 # v3.6.0
 
-      - name: Apply Updatecli
-        # Never use '--debug' option, because it might leak the access tokens.
-        run: "updatecli pipeline apply --clean --config ./updatecli/updatecli.d/ --values ./updatecli/values.yaml"
+      - name: Run Updatecli Pipeline
+        shell: bash
         env:
           UPDATECLI_GITHUB_ACTOR: ${{ github.actor }}
-          UPDATECLI_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPDATECLI_GITHUB_TOKEN: ${{ secrets.UPDATECLI_BOT_TOKEN || secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ matrix.branch }}
-          TARGET_REPO: ${{ github.event.repository.name }}
+          TARGET_REPO: ${{ github.event.repository.name || 'k3s' }}
           TARGET_ORG: ${{ github.repository_owner }}
           HELM_CONTROLLER_VERSION_PATTERN: ${{ matrix.helm_controller_pattern }}
+          COMMAND: ${{ steps.mode.outputs.command }}
+        run: |
+          set -euo pipefail
+          echo "Executing: updatecli pipeline $COMMAND --config ./updatecli/updatecli.d/ --values ./updatecli/values.yaml"
+          if [ "$COMMAND" = "diff" ]; then
+            updatecli pipeline diff --config ./updatecli/updatecli.d/ --values ./updatecli/values.yaml | tee updatecli-output.log || true
+          else
+            updatecli pipeline apply --clean --config ./updatecli/updatecli.d/ --values ./updatecli/values.yaml | tee updatecli-output.log
+          fi
+
+      - name: Publish Step Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "### Updatecli Output (${{ matrix.branch }})" >> "$GITHUB_STEP_SUMMARY"
+          if [ -s updatecli-output.log ]; then
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -n 30 updatecli-output.log >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No output logged." >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -2,30 +2,88 @@ name: "Updatecli: k3s-io/kubernetes Dependency and Go Bumps"
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Execution mode: 'auto' (resolve dynamically), 'native' (dry-run diff & summary), or 'original' (live apply & PR creation)"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - native
+          - original
+      branch:
+        description: "Target branch to update ('main', 'release-1.37', 'release-1.36', 'release-1.35', 'release-1.34', or 'all')"
+        required: false
+        default: "main"
+        type: choice
+        options:
+          - main
+          - release-1.37
+          - release-1.36
+          - release-1.35
+          - release-1.34
+          - all
+      dry_run:
+        description: "Dry run: run Updatecli diff instead of apply (no PRs or commits created)"
+        required: false
+        default: true
+        type: boolean
+      runner:
+        description: "Custom runner label (leave empty for vars.RUNNER_LABEL or ubuntu-24.04)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   updatecli:
-    runs-on: ubuntu-24.04
+    name: Bump K8s Dependencies (${{ matrix.branch }})
+    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     permissions:
       contents: write
       issues: write
       pull-requests: write
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
-        branch: 
-          - main
-          - release-1.37
-          - release-1.36
-          - release-1.35
-          - release-1.34
+        branch: ${{ (inputs.branch == 'main' && fromJSON('["main"]')) || (inputs.branch == 'release-1.37' && fromJSON('["release-1.37"]')) || (inputs.branch == 'release-1.36' && fromJSON('["release-1.36"]')) || (inputs.branch == 'release-1.35' && fromJSON('["release-1.35"]')) || (inputs.branch == 'release-1.34' && fromJSON('["release-1.34"]')) || fromJSON('["main", "release-1.37", "release-1.36", "release-1.35", "release-1.34"]') }}
     steps:
+      - name: Resolve Execution Mode
+        id: mode
+        shell: bash
+        run: |
+          REQUESTED_MODE="${{ inputs.mode || 'auto' }}"
+          echo "Requested mode: $REQUESTED_MODE"
+          if [ "$REQUESTED_MODE" = "auto" ]; then
+            if [ "${{ github.repository_owner }}" = "k3s-io" ]; then
+              RESOLVED_MODE="original"
+            else
+              RESOLVED_MODE="native"
+            fi
+          else
+            RESOLVED_MODE="$REQUESTED_MODE"
+          fi
+
+          if [ "$RESOLVED_MODE" = "native" ] || [ "${{ inputs.dry_run || false }}" = "true" ]; then
+            COMMAND="diff"
+          else
+            COMMAND="apply"
+          fi
+
+          echo "resolved_mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
+          echo "command=$COMMAND" >> "$GITHUB_OUTPUT"
+
+          echo "### Updatecli K8s Profile" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: \`$RESOLVED_MODE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Action: \`updatecli $COMMAND\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Target Branch: \`${{ matrix.branch }}\`" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@v4
 
       - name: Install Go
         uses: ./.github/actions/setup-go
@@ -33,11 +91,33 @@ jobs:
       - name: Install Updatecli
         uses: updatecli/updatecli-action@41b9c8d707830a9daebaeaa84c1b62d60b779564 # v3.6.0
 
-      - name: Apply Updatecli
-        run: "updatecli apply --clean --config ./updatecli/manual.d/k3s-io-kubernetes.yaml --values ./updatecli/values.yaml"
+      - name: Run Updatecli
+        shell: bash
         env:
           UPDATECLI_GITHUB_ACTOR: ${{ github.actor }}
-          UPDATECLI_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPDATECLI_GITHUB_TOKEN: ${{ secrets.UPDATECLI_BOT_TOKEN || secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ matrix.branch }}
-          TARGET_REPO: ${{ github.event.repository.name }}
+          TARGET_REPO: ${{ github.event.repository.name || 'k3s' }}
           TARGET_ORG: ${{ github.repository_owner }}
+          COMMAND: ${{ steps.mode.outputs.command }}
+        run: |
+          set -euo pipefail
+          echo "Executing: updatecli $COMMAND --config ./updatecli/manual.d/k3s-io-kubernetes.yaml --values ./updatecli/values.yaml"
+          if [ "$COMMAND" = "diff" ]; then
+            updatecli diff --config ./updatecli/manual.d/k3s-io-kubernetes.yaml --values ./updatecli/values.yaml | tee updatecli-output.log || true
+          else
+            updatecli apply --clean --config ./updatecli/manual.d/k3s-io-kubernetes.yaml --values ./updatecli/values.yaml | tee updatecli-output.log
+          fi
+
+      - name: Publish Step Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "### Updatecli K8s Output (${{ matrix.branch }})" >> "$GITHUB_STEP_SUMMARY"
+          if [ -s updatecli-output.log ]; then
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -n 30 updatecli-output.log >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No output logged." >> "$GITHUB_STEP_SUMMARY"
+          fi
