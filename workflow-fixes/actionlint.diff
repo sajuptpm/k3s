@@ -1,0 +1,116 @@
+--- a/.github/workflows/actionlint.yaml
++++ b/.github/workflows/actionlint.yaml
+@@ -3,21 +3,107 @@ on:
+   pull_request:
+     paths:
+       - ".github/workflows/*"
++  workflow_dispatch:
++    inputs:
++      mode:
++        description: "Execution mode: 'auto' (resolve dynamically), 'native' (GitHub-native runner/binary), or 'original' (upstream raven-actions)"
++        required: false
++        default: "auto"
++        type: choice
++        options:
++          - auto
++          - native
++          - original
++      runner:
++        description: "Custom runner label (leave empty for vars.RUNNER_LABEL or ubuntu-24.04)"
++        required: false
++        default: ""
++        type: string
++      shellcheck:
++        description: "Run shellcheck during linting"
++        required: false
++        default: false
++        type: boolean
++      pyflakes:
++        description: "Run pyflakes during linting"
++        required: false
++        default: false
++        type: boolean
+ 
+ permissions:
+   contents: read
+-  
++
+ jobs:
+   acitonlint:
+     name: Lint GitHub Workflows
+-    runs-on: ubuntu-24.04 # Runs on standard runner, docker pulls with --platform
++    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
+     steps:
+       - name: Checkout code
+-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+-      - name: actionlint
++        uses: actions/checkout@v4
++
++      - name: Resolve Execution Mode
++        id: mode
++        shell: bash
++        run: |
++          REQUESTED_MODE="${{ inputs.mode || 'auto' }}"
++          echo "Requested mode: $REQUESTED_MODE"
++          if [ "$REQUESTED_MODE" = "auto" ]; then
++            RESOLVED_MODE="native"
++          else
++            RESOLVED_MODE="$REQUESTED_MODE"
++          fi
++          echo "resolved_mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
++          echo "### Execution Mode Resolution" >> "$GITHUB_STEP_SUMMARY"
++          echo "- Mode: \`$RESOLVED_MODE\`" >> "$GITHUB_STEP_SUMMARY"
++          echo "- Runner: \`${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}\`" >> "$GITHUB_STEP_SUMMARY"
++
++      - name: actionlint (Original Mode)
++        if: steps.mode.outputs.resolved_mode == 'original'
+         uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2
+         with:
+-          shellcheck: false
+-          pyflakes: false
++          shellcheck: ${{ inputs.shellcheck || false }}
++          pyflakes: ${{ inputs.pyflakes || false }}
+           cache: ${{ github.ref == 'refs/heads/main' }}
+ 
++      - name: Setup actionlint (Native Alternative)
++        if: steps.mode.outputs.resolved_mode == 'native'
++        shell: bash
++        run: |
++          set -euo pipefail
++          echo "Installing latest standalone actionlint binary from GitHub Releases..."
++          mkdir -p "$HOME/.local/bin"
++          curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | bash -s -- latest "$HOME/.local/bin"
++          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
++
++      - name: actionlint (Native Alternative)
++        if: steps.mode.outputs.resolved_mode == 'native'
++        shell: bash
++        run: |
++          set -euo pipefail
++          SHELLCHECK_FLAG=""
++          if [ "${{ inputs.shellcheck || false }}" = "false" ]; then
++            SHELLCHECK_FLAG="-shellcheck="
++          fi
++          PYFLAKES_FLAG=""
++          if [ "${{ inputs.pyflakes || false }}" = "false" ]; then
++            PYFLAKES_FLAG="-pyflakes="
++          fi
++          echo "Running actionlint natively..."
++          mkdir -p workflow-reports
++          if actionlint $SHELLCHECK_FLAG $PYFLAKES_FLAG .github/workflows/*.yaml .github/workflows/*.yml | tee workflow-reports/actionlint-report.txt; then
++            echo "### ✅ Actionlint Verification Passed" >> "$GITHUB_STEP_SUMMARY"
++            echo "All workflow files passed actionlint validation successfully." >> "$GITHUB_STEP_SUMMARY"
++          else
++            STATUS=$?
++            echo "### ❌ Actionlint Issues Detected" >> "$GITHUB_STEP_SUMMARY"
++            cat workflow-reports/actionlint-report.txt >> "$GITHUB_STEP_SUMMARY"
++            exit $STATUS
++          fi
++
++      - name: Upload Lint Report (Native Alternative)
++        if: steps.mode.outputs.resolved_mode == 'native' && always()
++        uses: actions/upload-artifact@v4
++        with:
++          name: actionlint-report
++          path: workflow-reports/
++          if-no-files-found: ignore
