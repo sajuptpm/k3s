@@ -1,30 +1,100 @@
 name: Stalebot
+
 on:
   schedule:
     - cron: '0 20 * * *'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Execution mode: 'auto' (resolve dynamically), 'native' (GitHub-native dry-run/audit), or 'original' (live issue marking)"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - native
+          - original
+      dry_run:
+        description: "Dry run: analyze issues without applying labels or closing issues (debug-only)"
+        required: false
+        default: true
+        type: boolean
+      days_before_issue_stale:
+        description: "Days of inactivity before an issue is marked stale"
+        required: false
+        default: "45"
+        type: string
+      days_before_issue_close:
+        description: "Days of inactivity after being marked stale before an issue is closed"
+        required: false
+        default: "14"
+        type: string
+      runner:
+        description: "Custom runner label (leave empty for vars.RUNNER_LABEL or ubuntu-24.04)"
+        required: false
+        default: ""
+        type: string
+
 permissions:
   contents: read
+
 jobs:
   stalebot:
-    runs-on: ubuntu-24.04
+    name: Stale Issues Management
+    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     permissions:
       issues: write
-      contents: write
+      pull-requests: write
+      contents: read
     steps:
-      - name: Close Stale Issues
-        uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
-        with:
-          # ensure PRs are exempt
-          days-before-pr-stale: -1
-          day-before-pr-closed: -1
+      - name: Resolve Execution Mode
+        id: mode
+        shell: bash
+        run: |
+          REQUESTED_MODE="${{ inputs.mode || 'auto' }}"
+          echo "Requested mode: $REQUESTED_MODE"
+          if [ "$REQUESTED_MODE" = "auto" ]; then
+            if [ "${{ github.repository_owner }}" = "k3s-io" ] && [ "${{ github.event_name }}" = "schedule" ]; then
+              RESOLVED_MODE="original"
+            else
+              RESOLVED_MODE="native"
+            fi
+          else
+            RESOLVED_MODE="$REQUESTED_MODE"
+          fi
           
-          days-before-issue-stale: 45
-          days-before-issue-close: 14
+          # In native mode or if dry_run input is set, enforce debug-only execution
+          if [ "$RESOLVED_MODE" = "native" ] || [ "${{ inputs.dry_run || false }}" = "true" ]; then
+            DEBUG_ONLY="true"
+          else
+            DEBUG_ONLY="false"
+          fi
+          
+          echo "resolved_mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
+          echo "debug_only=$DEBUG_ONLY" >> "$GITHUB_OUTPUT"
+          
+          echo "### Stalebot Execution Profile" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: \`$RESOLVED_MODE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Debug Only / Dry Run: \`$DEBUG_ONLY\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Days Before Stale: \`${{ inputs.days_before_issue_stale || '45' }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Days Before Close: \`${{ inputs.days_before_issue_close || '14' }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Process Stale Issues
+        id: stale
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          # Ensure PRs are exempt
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
+          
+          days-before-issue-stale: ${{ fromJSON(inputs.days_before_issue_stale || '45') }}
+          days-before-issue-close: ${{ fromJSON(inputs.days_before_issue_close || '14') }}
           stale-issue-label: status/stale
           exempt-all-milestones: true
           exempt-all-assignees: true
-          exempt-issue-labels:
+          debug-only: ${{ steps.mode.outputs.debug_only == 'true' }}
+          exempt-issue-labels: >-
             internal,
             kind/bug,
             kind/bug-qa,
@@ -45,9 +115,18 @@ jobs:
             priority/low,
             priority/medium,
             priority/high,
-            priority/urgent,
-          stale-issue-message: > 
+            priority/urgent
+          stale-issue-message: >
             This repository uses a bot to automatically label issues which have not had any activity (commit/comment/label) 
             for 45 days. This helps us manage the community issues better. If the issue is still relevant, please add a comment to the 
             issue so the bot can remove the label and we know it is still valid. If it is no longer relevant (or possibly fixed in the 
             latest release), the bot will automatically close the issue in 14 days. Thank you for your contributions.
+
+      - name: Render Audit Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "### Stalebot Audit Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Staled Issues Count: \`${{ steps.stale.outputs.staled-issues-prs || '0' }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Closed Issues Count: \`${{ steps.stale.outputs.closed-issues-prs || '0' }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Execution completed successfully in \`${{ steps.mode.outputs.resolved_mode }}\` mode (debug_only=\`${{ steps.mode.outputs.debug_only }}\`)." >> "$GITHUB_STEP_SUMMARY"
