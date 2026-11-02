@@ -88,7 +88,34 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
+### Run Summary
+- **Run ID**: `41420524660`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41420524660](https://github.com/sajuptpm/k3s/actions/runs/41420524660)
+- **Job ID**: `125194698049`
+- **Trigger**: `workflow_dispatch` (inputs: `mode=native`, `fail_on_vuln=false`, `package=./...`)
+- **Outcome**: `success` (Completed cleanly in 2m14s, converting previous persistent failure to a clean audit run)
+- **Branch**: `main`
+- **Commit**: `27974c99f48a16314c442435f29d2f627768e1ce`
+
+### Execution Timeline Table
+
+| Step Name | Status | Duration | Notes / Log Evidence |
+|---|---|---|---|
+| **Set up job** | `success` | 2s | Runner image `ubuntu-24.04`, GITHUB_TOKEN read scopes confirmed |
+| **Checkout** | `success` | 1s | Cloned `sajuptpm/k3s` at commit `27974c9` via `actions/checkout@v4` |
+| **Resolve Execution Mode** | `success` | 1s | Resolved to `native` mode, package `./...`, fail_on_vuln `false` |
+| **Install Go** | `success` | 25s | Setup Go runtime from `go.mod` via composite action `.github/actions/setup-go` |
+| **Install govulncheck** | `success` | 12s | Installed `golang.org/x/vuln/cmd/govulncheck@v1.1.4` |
+| **Run govulncheck (Original Mode)** | `skipped` | 0s | Correctly bypassed per conditional |
+| **Run govulncheck (Native Alternative)** | `success` | 1m26s | Executed vulnerability scan, captured findings into report, rendered summary |
+| **Upload Vulnerability Report** | `success` | 1s | Uploaded `govulncheck-report` artifact via `actions/upload-artifact@v4` |
+| **Post Cleanups & Complete job** | `success` | 6s | Finalized job steps and process cleanups |
+
+### Generated Artifacts
+
+| Artifact Name | Artifact ID | Size | Download Link |
+|---|---|---|---|
+| `govulncheck-report` | `13129513144` | 6,217 bytes | [Download Artifact 13129513144](https://github.com/sajuptpm/k3s/actions/runs/41420524660/artifacts/13129513144) |
 
 ---
 
