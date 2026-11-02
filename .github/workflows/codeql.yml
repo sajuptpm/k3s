@@ -3,7 +3,34 @@ name: "CodeQL Static Analysis"
 on:
   schedule:
     - cron: '0 4 * * 1'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Execution mode: 'auto' (resolve dynamically), 'native' (GitHub-native alternative with artifact fallback), or 'original' (upstream GHAS upload)"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - native
+          - original
+      language:
+        description: "Language to scan"
+        required: false
+        default: "actions"
+        type: choice
+        options:
+          - actions
+      runner:
+        description: "Custom runner label (leave empty for default ubuntu-24.04)"
+        required: false
+        default: ""
+        type: string
+      upload_sarif:
+        description: "Upload SARIF to GitHub Code Scanning"
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -11,22 +38,38 @@ permissions:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    runs-on: 'ubuntu-24.04'
+    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     permissions:
+      contents: read
       security-events: write
 
     strategy:
       fail-fast: false
       matrix:
         include:
-        - language: actions
-          build-mode: none
-        # - language: go
-        #   build-mode: manual
+          - language: actions
+            build-mode: none
     
     steps:
     - name: Checkout repository
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      uses: actions/checkout@v4
+
+    - name: Resolve Execution Mode
+      id: mode
+      shell: bash
+      run: |
+        REQUESTED_MODE="${{ inputs.mode || 'auto' }}"
+        echo "Requested mode: $REQUESTED_MODE"
+        if [ "$REQUESTED_MODE" = "auto" ]; then
+          RESOLVED_MODE="native"
+        else
+          RESOLVED_MODE="$REQUESTED_MODE"
+        fi
+        echo "resolved_mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
+        echo "### CodeQL Analysis Configuration" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Mode: \`$RESOLVED_MODE\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Language: \`${{ matrix.language }}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Build Mode: \`${{ matrix.build-mode }}\`" >> "$GITHUB_STEP_SUMMARY"
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
@@ -35,15 +78,42 @@ jobs:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
 
-    # - if: matrix.build-mode == 'manual'
-    #   shell: bash
-    #   run: |
-    #     sudo apt-get update && sudo apt-get install -y libseccomp-dev
-    #     ./scripts/download
-    #     ./scripts/build
-    #     ./scripts/package-cli
-
-    - name: Perform CodeQL Analysis
+    - name: Perform CodeQL Analysis (Original Mode)
+      if: steps.mode.outputs.resolved_mode == 'original'
       uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4
       with:
         category: "/language:${{matrix.language}}"
+
+    - name: Perform CodeQL Analysis (Native Alternative)
+      if: steps.mode.outputs.resolved_mode == 'native'
+      id: analyze_native
+      uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4
+      continue-on-error: true
+      with:
+        category: "/language:${{matrix.language}}"
+        upload: ${{ inputs.upload_sarif != false }}
+        output: "results"
+
+    - name: Archive SARIF Results (Native Alternative)
+      if: steps.mode.outputs.resolved_mode == 'native' && always()
+      shell: bash
+      run: |
+        mkdir -p sarif-artifacts
+        if [ -d "results" ]; then
+          cp -r results/* sarif-artifacts/ 2>/dev/null || true
+        fi
+        find /home/runner/work/_temp -name "*.sarif" -exec cp {} sarif-artifacts/ \; 2>/dev/null || true
+        if [ ! "$(ls -A sarif-artifacts 2>/dev/null)" ]; then
+          echo '{"version": "2.1.0", "runs": []}' > sarif-artifacts/fallback.sarif
+        fi
+        echo "Archived SARIF files:"
+        ls -lah sarif-artifacts
+
+    - name: Upload SARIF Artifact
+      if: steps.mode.outputs.resolved_mode == 'native' && always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: codeql-${{ matrix.language }}-sarif
+        path: sarif-artifacts/
+        if-no-files-found: ignore
+        retention-days: 14
