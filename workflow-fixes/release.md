@@ -100,24 +100,22 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
-
-- **Run ID**: Pending
-- **Run URL**: Pending
+- **Run ID**: `41423586948`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41423586948](https://github.com/sajuptpm/k3s/actions/runs/41423586948)
 - **Trigger**: `workflow_dispatch` (`mode=native`, `dry_run=true`, `tag=v0.0.0-test`)
-- **Outcome**: Pending
+- **Outcome**: **SUCCESS** (All 8 jobs succeeded across the entire release pipeline)
 
 ### Execution Timeline
 | Job | Status | Duration | Artifacts Produced |
 | :--- | :--- | :--- | :--- |
-| `build-amd64` | Pending | - | `k3s-linux-amd64` |
-| `build-arm` | Pending | - | `k3s-linux-arm64-linux-arm-v7` |
-| `build-airgap (amd64)` | Pending | - | `images-amd64` |
-| `build-airgap (arm64)` | Pending | - | `images-arm64` |
-| `build-airgap (arm)` | Pending | - | `images-arm` |
-| `push-release-image` | Pending | - | Docker image metadata summary |
-| `upload-release-assets` | Pending | - | `release-assets-v0.0.0-test` |
-| `dispatch-k3s-upgrade` | Pending | - | Step summary log |
+| `build-amd64` (`Build`) | **Success** | 16s | `k3s-amd64` |
+| `build-arm` (`Build`) | **Success** | 14s | `k3s-all` |
+| `build-airgap` (`Export Images (amd64)`) | **Success** | 13s | `images-amd64` |
+| `build-airgap` (`Export Images (arm64)`) | **Success** | 21s | `images-arm64` |
+| `build-airgap` (`Export Images (arm)`) | **Success** | 12s | `images-arm` |
+| `push-release-image` | **Success** | 41s | Image metadata validated & summary published |
+| `upload-release-assets` | **Success** | 8s | `release-assets-v0.0.0-test` (16 validated assets) |
+| `dispatch-k3s-upgrade` | **Success** | 3s | Simulated upgrade summary logged |
 
 ---
 
