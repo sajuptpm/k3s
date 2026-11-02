@@ -135,7 +135,9 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload Results To Codecov
-        if: steps.mode.outputs.resolved_mode == 'original' || env.CODECOV_TOKEN != ''
+        env:
+          HAS_CODECOV: ${{ secrets.CODECOV_TOKEN != '' }}
+        if: steps.mode.outputs.resolved_mode == 'original' || env.HAS_CODECOV == 'true'
         uses: codecov/codecov-action@v5
         continue-on-error: true
         with:
@@ -180,7 +182,9 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload Results To Codecov
-        if: secrets.CODECOV_TOKEN != ''
+        env:
+          HAS_CODECOV: ${{ secrets.CODECOV_TOKEN != '' }}
+        if: env.HAS_CODECOV == 'true'
         uses: codecov/codecov-action@v5
         continue-on-error: true
         with:
