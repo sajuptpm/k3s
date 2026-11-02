@@ -1,0 +1,193 @@
+--- a/.github/workflows/build-k3s.yaml
++++ b/.github/workflows/build-k3s.yaml
+@@ -1,3 +1,4 @@
++name: Build K3s
+ on: 
+   workflow_call:
+     inputs:
+@@ -21,6 +22,62 @@ on:
+         description: 'Whether to build K3s with -cover for test coverage collection'
+         required: false
+         default: false
++      mode:
++        type: string
++        description: "Execution mode: 'auto', 'native', or 'original'"
++        required: false
++        default: 'auto'
++      runner:
++        type: string
++        description: 'Custom runner label override'
++        required: false
++        default: ''
++      dry_run:
++        type: boolean
++        description: 'Dry run for rapid pipeline testing'
++        required: false
++        default: false
++  workflow_dispatch:
++    inputs:
++      platforms:
++        type: string
++        description: 'Buildx platform list.'
++        required: false
++        default: 'linux/amd64'
++      upload-image:
++        type: boolean
++        description: 'Build and upload k3s image (only works on arm64 or amd64)'
++        required: false
++        default: false
++      upload-build:
++        type: boolean
++        description: 'Upload contents of build/out, used to build the k3s image externally'
++        required: false
++        default: false
++      test-coverage:
++        type: boolean
++        description: 'Whether to build K3s with -cover for test coverage collection'
++        required: false
++        default: false
++      mode:
++        type: choice
++        description: "Execution mode: 'auto', 'native', or 'original'"
++        required: false
++        default: 'auto'
++        options:
++          - auto
++          - native
++          - original
++      runner:
++        type: string
++        description: 'Custom runner label override (leave empty for default)'
++        required: false
++        default: ''
++      dry_run:
++        type: boolean
++        description: 'Dry run: create mock artifacts for fast verification'
++        required: false
++        default: false
+ 
+ permissions:
+   contents: read
+@@ -28,20 +85,55 @@ permissions:
+ jobs:
+   build:
+     name: Build # DO NOT CHANGE THIS NAME, we rely on it for INSTALL_K3S_PR functionality
+-    runs-on: ${{ (!contains(inputs.platforms, 'amd64') && !contains(inputs.platforms, 'windows/') && !contains(inputs.platforms, 'riscv64') && (github.repository_owner == 'k3s-io' && 'cncf-ubuntu-16-64-arm' || 'ubuntu-24.04-arm')) 
+-      || (github.repository_owner == 'k3s-io' && 'cncf-ubuntu-16-64-x86' || 'ubuntu-24.04') }}
++    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || ((!contains(inputs.platforms, 'amd64') && !contains(inputs.platforms, 'windows/') && !contains(inputs.platforms, 'riscv64') && (github.repository_owner == 'k3s-io' && 'cncf-ubuntu-16-64-arm' || 'ubuntu-24.04-arm')) || (github.repository_owner == 'k3s-io' && 'cncf-ubuntu-16-64-x86' || 'ubuntu-24.04')) }}
+     timeout-minutes: 30
+     steps:
+     - name: Checkout K3s
+-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
++      uses: actions/checkout@v4
++
++    - name: Resolve Execution Mode
++      id: mode
+       shell: bash
++      run: |
++        REQUESTED_MODE="${{ inputs.mode || 'auto' }}"
++        echo "Requested mode: $REQUESTED_MODE"
++        if [ "$REQUESTED_MODE" = "auto" ]; then
++          RESOLVED_MODE="native"
++        else
++          RESOLVED_MODE="$REQUESTED_MODE"
++        fi
++        echo "resolved_mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
++        echo "### K3s Build Configuration" >> "$GITHUB_STEP_SUMMARY"
++        echo "- Mode: \`$RESOLVED_MODE\`" >> "$GITHUB_STEP_SUMMARY"
++        echo "- Platform(s): \`${{ inputs.platforms || 'linux/amd64' }}\`" >> "$GITHUB_STEP_SUMMARY"
++        echo "- Dry Run: \`${{ inputs.dry_run || false }}\`" >> "$GITHUB_STEP_SUMMARY"
+     
+-    - name: Set up Docker
++    - name: Set up Docker (Original Mode)
++      if: steps.mode.outputs.resolved_mode == 'original'
+       uses: docker/setup-docker-action@77e84dbf09b47d1e29270283c22f16145aa85ca1 # v5.4.0
+       with:
+         version: type=image,tag=29
+         daemon-config: '{"features":{"containerd-snapshotter":true}}'
+         set-host: true
+ 
++    - name: Configure Native Docker & Containerd (Native Mode)
++      if: steps.mode.outputs.resolved_mode == 'native'
++      shell: bash
++      run: |
++        set -euo pipefail
++        echo "Configuring runner native Docker daemon..."
++        sudo mkdir -p /etc/docker
++        sudo bash -c 'cat <<EOF > /etc/docker/daemon.json
++        {
++          "features": {
++            "containerd-snapshotter": true
++          }
++        }
++        EOF'
++        sudo systemctl daemon-reload
++        sudo systemctl restart docker
++        docker info
++
+     - name: Set up Docker Buildx
+       uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+ 
+@@ -59,7 +151,7 @@ jobs:
+     - name: Determine build platforms
+       id: platforms
+       run: |
+-        platforms='${{ inputs.platforms }}'
++        platforms='${{ inputs.platforms || 'linux/amd64' }}'
+         case "${platforms}" in
+           linux/amd64) artifact_name='k3s-amd64' ;;
+           linux/arm64) artifact_name='k3s-arm64' ;;
+@@ -83,6 +175,7 @@ jobs:
+         } >> "$GITHUB_OUTPUT"
+ 
+     - name: Build K3s binaries
++      if: inputs.dry_run != true
+       env:
+         DOCKER_BUILD_SUMMARY: false
+       uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+@@ -101,7 +194,19 @@ jobs:
+         platforms: ${{ steps.platforms.outputs.platforms }}
+         outputs: type=local,dest=.,platform-split=false
+ 
+-    - name: Caculate binary checksum
++    - name: Mock K3s binaries (Dry Run)
++      if: inputs.dry_run == true
++      shell: bash
++      run: |
++        set -euo pipefail
++        echo "Creating mock K3s build artifacts for fast pipeline verification..."
++        mkdir -p dist/artifacts ./build/out ./bin
++        echo "mock-k3s-binary" > dist/artifacts/k3s
++        echo "mock-k3s-binary" > ./bin/k3s
++        chmod +x dist/artifacts/k3s ./bin/k3s
++        tar -czf ./build/out/data-linux-amd64.tar.zst -C ./bin k3s
++
++    - name: Calculate binary checksum
+       run: |
+         for binary in dist/artifacts/k3s dist/artifacts/k3s-* dist/artifacts/k3s.exe; do
+           [ -f "${binary}" ] || continue
+@@ -114,7 +219,7 @@ jobs:
+         done
+     
+     - name: Build and save K3s image
+-      if: inputs.upload-image == true && steps.platforms.outputs.image_allowed == 'true'
++      if: inputs.upload-image == true && steps.platforms.outputs.image_allowed == 'true' && inputs.dry_run != true
+       run: |
+         ./scripts/package-image
+         docker image save rancher/k3s -o ./dist/artifacts/k3s-image.tar
+@@ -128,11 +233,13 @@ jobs:
+     - name: "Save bin k3s binary"
+       if: contains(steps.platforms.outputs.platforms, 'linux/amd64')
+       run: |
+-        tar --zstd -xf ./build/out/data-linux-amd64.tar.zst ./bin/k3s
++        if [ -f ./build/out/data-linux-amd64.tar.zst ]; then
++          tar --zstd -xf ./build/out/data-linux-amd64.tar.zst ./bin/k3s 2>/dev/null || tar -xzf ./build/out/data-linux-amd64.tar.zst ./bin/k3s 2>/dev/null || cp dist/artifacts/k3s ./bin/k3s
++        fi
+         install -m 0755 ./bin/k3s ./dist/artifacts/bin-k3s
+ 
+     - name: "Upload K3s Artifacts"
+-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
++      uses: actions/upload-artifact@v4
+       with:
+         name: ${{ steps.platforms.outputs.artifact_name }}
+         path: dist/artifacts/
