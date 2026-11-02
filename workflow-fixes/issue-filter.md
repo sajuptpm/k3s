@@ -87,7 +87,28 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
+### Run Summary
+- **Run ID**: `41422220131`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41422220131](https://github.com/sajuptpm/k3s/actions/runs/41422220131)
+- **Job ID**: `125200225344`
+- **Trigger**: `workflow_dispatch` (inputs: `mode=native`, `dry_run=true`)
+- **Outcome**: `success` (Completed cleanly in 14s)
+- **Branch**: `main`
+- **Commit**: `cc2c6d416d86a60db8e4d3a016f4d66487e41362`
+
+### Execution Timeline Table
+
+| Step Name | Status | Duration | Notes / Log Evidence |
+|---|---|---|---|
+| **Set up job** | `success` | 1s | Runner image `ubuntu-24.04`, GITHUB_TOKEN `issues: write` scope confirmed |
+| **Resolve Execution Mode** | `success` | 1s | Resolved to `native` mode, dry_run `true` |
+| **Check issue size and type (Native Alternative)** | `success` | 1s | Gracefully handled missing webhook payload, evaluated issue size and rendered summary |
+| **Check issue size and type (Original Mode)** | `skipped` | 0s | Correctly bypassed per conditional |
+| **Close oversized issue** | `skipped` | 0s | Correctly bypassed to protect repository issues during dry-run testing |
+| **Complete job** | `success` | 11s | Cleaned up orphan processes and finalized job |
+
+### Generated Artifacts
+*This workflow publishes the Issue Filter Analysis card directly to the GitHub Actions Step Summary.*
 
 ---
 
