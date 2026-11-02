@@ -87,7 +87,34 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
+### Run Summary
+- **Run ID**: `41412785022`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41412785022](https://github.com/sajuptpm/k3s/actions/runs/41412785022)
+- **Job ID**: `125169425131`
+- **Trigger**: `workflow_dispatch` (inputs: `mode=native`, `language=actions`, `upload_sarif=true`)
+- **Outcome**: `success` (Completed cleanly in 49s)
+- **Branch**: `main`
+- **Commit**: `5c5265aa04f056d641c888e2350ef09ea50a04fc`
+
+### Execution Timeline Table
+
+| Step Name | Status | Duration | Notes / Log Evidence |
+|---|---|---|---|
+| **Set up job** | `success` | 2s | Runner image `ubuntu-24.04`, GITHUB_TOKEN `contents: read` & `security-events: write` |
+| **Checkout repository** | `success` | 1s | Cloned `sajuptpm/k3s` at commit `5c5265a` via `actions/checkout@v4` |
+| **Resolve Execution Mode** | `success` | 1s | Resolved to `native` mode, language `actions` |
+| **Initialize CodeQL** | `success` | 16s | Initialized CodeQL database and queries for GitHub Actions |
+| **Perform CodeQL Analysis (Original Mode)** | `skipped` | 0s | Correctly bypassed per conditional |
+| **Perform CodeQL Analysis (Native Alternative)** | `success` | 24s | Executed CodeQL queries and produced SARIF output |
+| **Archive SARIF Results (Native Alternative)** | `success` | 1s | Located SARIF output files in `results/` |
+| **Upload SARIF Artifact** | `success` | 1s | Uploaded `codeql-actions-sarif` artifact via `actions/upload-artifact@v4` |
+| **Post Cleanups & Complete job** | `success` | 1s | Successfully finalized CodeQL telemetry and workspace cleanups |
+
+### Generated Artifacts
+
+| Artifact Name | Artifact ID | Size | Download Link |
+|---|---|---|---|
+| `codeql-actions-sarif` | `13126217697` | 22,288 bytes | [Download Artifact 13126217697](https://github.com/sajuptpm/k3s/actions/runs/41412785022/artifacts/13126217697) |
 
 ---
 
