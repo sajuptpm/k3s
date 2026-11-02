@@ -82,17 +82,17 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
-
-- **Run ID**: Pending
-- **Run URL**: Pending
-- **Trigger**: `workflow_dispatch` (`mode=native`, `dry_run=true`)
-- **Outcome**: Pending
+- **Run ID**: `41426223314`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41426223314](https://github.com/sajuptpm/k3s/actions/runs/41426223314)
+- **Trigger**: `workflow_dispatch` (`mode=native`, `dry_run=true`, `run_windows=false`, `run_test_mods=false`)
+- **Outcome**: **SUCCESS** (Executed in 21s, Go unit test coverage evaluated, summary rendered, artifact uploaded)
 
 ### Execution Timeline
 | Job | Status | Duration | Artifacts Produced |
 | :--- | :--- | :--- | :--- |
-| `test-unit-linux` | Pending | - | `unit-coverage-linux` |
+| `test-unit-linux` (`Unit Tests (linux)`) | **Success** | 21s | `unit-coverage-linux` |
+| `test-unit-windows` (`Unit Tests (windows)`) | Skipped (Configured) | 0s | - |
+| `test-mods` (`Test K8s Modules`) | Skipped (Configured) | 0s | - |
 
 ---
 
