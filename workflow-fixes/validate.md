@@ -86,17 +86,15 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
-
-- **Run ID**: Pending
-- **Run URL**: Pending
+- **Run ID**: `41429185758`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41429185758](https://github.com/sajuptpm/k3s/actions/runs/41429185758)
 - **Trigger**: `workflow_dispatch` (`mode=native`, `dry_run=true`, `run_windows=false`)
-- **Outcome**: Pending
+- **Outcome**: **SUCCESS** (Executed in 1m33s, Go toolchain verified, GolangCI-Lint executed, module & checksum validation completed)
 
 ### Execution Timeline
 | Job | Status | Duration | Artifacts Produced |
 | :--- | :--- | :--- | :--- |
-| `validate` | Pending | - | Step Summary Validation Report |
+| `validate` (`Validate`) | **Success** | 1m33s | Step Summary Validation Report |
 
 ---
 
