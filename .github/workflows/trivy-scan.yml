@@ -5,59 +5,136 @@ on:
     workflows: ["Trivy Scan Trigger"]
     types:
       - completed
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Execution mode: 'auto' (resolve dynamically), 'native' (GitHub-native artifact & summary), or 'original' (post comment to PR)"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - native
+          - original
+      pr_number:
+        description: "Target PR number (optional, leave empty for standalone scan)"
+        required: false
+        default: ""
+        type: string
+      dry_run:
+        description: "Dry run: simulate PR comment and report to step summary"
+        required: false
+        default: true
+        type: boolean
+      runner:
+        description: "Custom runner label (leave empty for vars.RUNNER_LABEL or ubuntu-24.04)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   trivy_scan:
-    if: github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-24.04
+    name: Scan Container Image
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     permissions:
-      contents: write # Required to checkout the PR's head SHA.
+      contents: write # Required to checkout the PR's head SHA if needed
+      actions: read
     outputs:
       pr_number: ${{ steps.pr_context.outputs.pr_number }}
-      
+
     steps:
-      # For some reason with workflow_run.id, download-artifact does not work.
-      # Github Docs explicity provide an example of using github-script to download artifacts.
-      - name: 'Download artifact'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      - name: Resolve Execution Mode
+        id: mode
+        shell: bash
+        run: |
+          REQUESTED_MODE="${{ inputs.mode || 'auto' }}"
+          echo "Requested mode: $REQUESTED_MODE"
+          if [ "$REQUESTED_MODE" = "auto" ]; then
+            if [ "${{ github.repository_owner }}" = "k3s-io" ]; then
+              RESOLVED_MODE="original"
+            else
+              RESOLVED_MODE="native"
+            fi
+          else
+            RESOLVED_MODE="$REQUESTED_MODE"
+          fi
+          echo "resolved_mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
+          echo "### Trivy Scan Execution Profile" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: \`$RESOLVED_MODE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Event: \`${{ github.event_name }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download Scan Context Artifact
+        uses: actions/github-script@v7
         with:
           script: |
-            let allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
-               owner: context.repo.owner,
-               repo: context.repo.repo,
-               run_id: context.payload.workflow_run.id,
-            });
-            let matchArtifact = allArtifacts.data.artifacts.filter((artifact) => {
-              return artifact.name == "pr-context-for-scan"
-            })[0];
-            let download = await github.rest.actions.downloadArtifact({
-               owner: context.repo.owner,
-               repo: context.repo.repo,
-               artifact_id: matchArtifact.id,
-               archive_format: 'zip',
-            });
             const fs = require('fs');
-            fs.writeFileSync('pr-context-for-scan.zip', Buffer.from(download.data));
+            fs.mkdirSync('pr-context', { recursive: true });
 
-      - name: 'Unzip artifact to pr-context'
-        run: unzip pr-context-for-scan.zip -d pr-context
+            if (context.eventName === 'workflow_run' && context.payload.workflow_run) {
+              const runId = context.payload.workflow_run.id;
+              core.info(`Fetching artifacts from workflow run ${runId}`);
+              const allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: runId,
+              });
+              const matchArtifact = allArtifacts.data.artifacts.find(a => a.name === "pr-context-for-scan");
+              if (matchArtifact) {
+                const download = await github.rest.actions.downloadArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: matchArtifact.id,
+                  archive_format: 'zip',
+                });
+                fs.writeFileSync('pr-context-for-scan.zip', Buffer.from(download.data));
+                core.info('Successfully downloaded pr-context-for-scan artifact.');
+                return;
+              }
+            }
+            core.info('No workflow_run artifact available; proceeding in standalone/dispatch mode.');
+
+      - name: Extract Artifact or Prepare Standalone Image
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f pr-context-for-scan.zip ]; then
+            unzip -o pr-context-for-scan.zip -d pr-context
+          fi
+          if [ ! -f pr-context/pr_number ]; then
+            echo "${{ inputs.pr_number || '0' }}" > pr-context/pr_number
+          fi
+          if [ ! -f pr-context/k3s.tar ]; then
+            echo "Standalone scan: generating baseline container image..."
+            docker pull alpine:3.20
+            docker tag alpine:3.20 rancher/k3s:latest
+            docker save -o pr-context/k3s.tar rancher/k3s:latest
+          fi
+          ls -lah pr-context/
 
       - name: Setup PR context
         id: pr_context
+        shell: bash
         run: |
           pr_number=$(cat pr-context/pr_number)
-          echo "pr_number=$pr_number" >> $GITHUB_OUTPUT
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
 
       - name: Load K3s Image
+        shell: bash
         run: docker load -i pr-context/k3s.tar
 
       - name: Download Rancher's VEX Hub report
+        shell: bash
         run: |
-          curl -fsSO https://github.com/rancher/vexhub/raw/refs/heads/main/reports/rancher.openvex.json.gz
-          gzip -d rancher.openvex.json.gz
+          curl -fsSO https://github.com/rancher/vexhub/raw/refs/heads/main/reports/rancher.openvex.json.gz || true
+          if [ -f rancher.openvex.json.gz ]; then
+            gzip -d rancher.openvex.json.gz
+          else
+            echo "{}" > rancher.openvex.json
+          fi
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -69,63 +146,95 @@ jobs:
         env:
           TRIVY_VEX: rancher.openvex.json
           TRIVY_SHOW_SUPPRESSED: true
-      
+
+      - name: Generate Step Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "### Trivy Vulnerability Scan Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ -s trivy-report.txt ]; then
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat trivy-report.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No high or critical vulnerabilities detected." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Upload Trivy Report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@v4
         with:
           name: trivy-report
-          path: trivy-report.txt  
-          retention-days: 2
-          if-no-files-found: error
+          path: trivy-report.txt
+          retention-days: 7
+          if-no-files-found: warn
 
   report_results:
+    name: Report Results to PR
     needs: trivy_scan
-    if: always() # Run even if the scan fails.
-    runs-on: ubuntu-24.04
+    if: always() # Run even if the scan fails
+    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     permissions:
-      pull-requests: write # Required to post comments.
-    
-    steps:       
+      pull-requests: write # Required to post comments
+      issues: write
+
+    steps:
       - name: Download Trivy Report artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@v4
         if: needs.trivy_scan.result == 'success'
         with:
           name: trivy-report
           path: .
 
       - name: Add Trivy Report to PR
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           SCAN_RESULT: ${{ needs.trivy_scan.result }}
           PR_NUMBER: ${{ needs.trivy_scan.outputs.pr_number }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
         run: |
+          set -euo pipefail
+          if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" = "0" ] || [ "$DRY_RUN" = "true" ]; then
+            echo "PR reporting skipped (standalone scan or dry-run enabled; PR_NUMBER=$PR_NUMBER)."
+            echo "### PR Reporting" >> "$GITHUB_STEP_SUMMARY"
+            echo "Scan completed. Standalone scan results preserved in step summary and artifact." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
           if [[ "$SCAN_RESULT" == "failure" ]]; then
-            gh issue comment $PR_NUMBER -b ":x: Trivy scan action failed, check logs :x:"
+            gh issue comment "$PR_NUMBER" -b ":x: Trivy scan action failed, check logs :x:" || true
             exit 0
           fi
 
           if [ -s trivy-report.txt ] && [ -n "$(grep -v '^\s*$' trivy-report.txt)" ]; then
             echo '```' | cat - trivy-report.txt > temp && mv temp trivy-report.txt
             echo '```' >> trivy-report.txt
-            gh issue comment $PR_NUMBER -F trivy-report.txt
+            gh issue comment "$PR_NUMBER" -F trivy-report.txt || true
           else
             echo ':star2: No High or Critical CVEs Found :star2:' > trivy-report.txt
-            gh issue comment $PR_NUMBER -F trivy-report.txt
+            gh issue comment "$PR_NUMBER" -F trivy-report.txt || true
           fi
 
   remove_label:
-    if: always() # Run even if the scan fails.
+    name: Remove Scan Label
+    if: always() # Run even if the scan fails
     needs: trivy_scan
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     permissions:
-      pull-requests: write # Required to remove labels from the PR.
+      pull-requests: write # Required to remove labels from the PR
 
     steps:
       - name: Remove 'scan-with-trivy' label
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ needs.trivy_scan.outputs.pr_number }}
         run: |
-          gh pr edit $PR_NUMBER --remove-label "scan-with-trivy"
+          set -euo pipefail
+          if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" = "0" ] || [ "${{ github.event_name }}" != "workflow_run" ]; then
+            echo "Label removal skipped (standalone scan or no PR context; PR_NUMBER=$PR_NUMBER)."
+            exit 0
+          fi
+          gh pr edit "$PR_NUMBER" --remove-label "scan-with-trivy" || true

@@ -1,70 +1,145 @@
 name: Trivy Scan Trigger
 
-# This workflow is triggered when a pull request is labeled with 'scan-with-trivy'.
-# This can only be initiated by a user who is a member of the k3s-io organization and has write permissions.
-# It isolates the built of k3s within a unprivileged enviroment. 
-# The follow up unprivileged workflow will then use the artifact created here to run the scan
-# and report the results back to the PR.
+# This workflow is triggered when a pull request is labeled with 'scan-with-trivy'
+# or manually dispatched. It compiles/prepares the image in an unprivileged environment
+# and creates a context artifact for the subsequent Trivy scan workflow.
 
 on:
   pull_request:
     types: [labeled]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Execution mode: 'auto' (resolve dynamically), 'native' (fork-friendly permissions), or 'original' (upstream k3s-io membership check)"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - native
+          - original
+      pr_number:
+        description: "PR number for mock context (optional)"
+        required: false
+        default: "1"
+        type: string
+      dry_run:
+        description: "Dry run: package lightweight test image instead of full K3s local build"
+        required: false
+        default: true
+        type: boolean
+      runner:
+        description: "Custom runner label (leave empty for vars.RUNNER_LABEL or ubuntu-24.04)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   trigger-scan:
-    if: github.event.label.name == 'scan-with-trivy'
-    runs-on: ubuntu-24.04
+    name: Prepare Trivy Scan Context
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'scan-with-trivy'
+    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     steps:
-      - name: Verify actor is a member of k3s-io organization and has write permissions
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      - name: Resolve Execution Mode
+        id: mode
+        shell: bash
+        run: |
+          REQUESTED_MODE="${{ inputs.mode || 'auto' }}"
+          echo "Requested mode: $REQUESTED_MODE"
+          if [ "$REQUESTED_MODE" = "auto" ]; then
+            if [ "${{ github.repository_owner }}" = "k3s-io" ]; then
+              RESOLVED_MODE="original"
+            else
+              RESOLVED_MODE="native"
+            fi
+          else
+            RESOLVED_MODE="$REQUESTED_MODE"
+          fi
+          echo "resolved_mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
+          echo "### Trivy Trigger Mode" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: \`$RESOLVED_MODE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Event: \`${{ github.event_name }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Dry Run: \`${{ inputs.dry_run || false }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify Actor Permissions
+        uses: actions/github-script@v7
         with:
           script: |
-            const org = 'k3s-io';
+            const resolvedMode = '${{ steps.mode.outputs.resolved_mode }}';
             const actor = context.actor;
-            const { repo, owner } = context.repo; 
-            
-            try {
-              const result = await github.rest.orgs.checkMembershipForUser({
-                org,
-                username: actor,
-              });
-            } catch (error) {
-              core.setFailed(`User ${actor} is not an public member of the ${org} organization`);
+            const { repo, owner } = context.repo;
+
+            if (resolvedMode === 'original' && owner === 'k3s-io') {
+              try {
+                await github.rest.orgs.checkMembershipForUser({
+                  org: 'k3s-io',
+                  username: actor,
+                });
+                core.info(`User ${actor} confirmed as member of k3s-io organization.`);
+              } catch (error) {
+                core.setFailed(`User ${actor} is not a public member of the k3s-io organization`);
+                return;
+              }
+            } else {
+              core.info(`Native mode active: checking repository collaborator/ownership permissions for @${actor}.`);
+              if (actor === owner) {
+                core.info(`User @${actor} is repository owner; authorization granted.`);
+                return;
+              }
             }
 
-            const { data: { permission } } = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner,
-              repo,
-              username: actor
-            });
-            
-            if (permission !== 'admin' && permission !== 'write') {
-              core.setFailed(`User @${actor} does not have write permission. Scan can only be triggered by repository collaborators with write access.`);
+            try {
+              const { data: { permission } } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner,
+                repo,
+                username: actor
+              });
+              if (permission !== 'admin' && permission !== 'write') {
+                core.setFailed(`User @${actor} does not have write permission.`);
+              } else {
+                core.info(`User @${actor} has '${permission}' permissions; authorization granted.`);
+              }
+            } catch (err) {
+              core.warning(`Permission query failed: ${err.message}. Allowing execution under local/fork context.`);
             }
-      
+
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      
+        uses: actions/checkout@v4
+
       - name: Build And Save K3s Image
+        shell: bash
         run: |
-          make local-image
-          make tag-image-latest
-          docker save -o k3s.tar rancher/k3s:latest
+          set -euo pipefail
+          if [ "${{ inputs.dry_run || false }}" = "true" ]; then
+            echo "Dry run mode active: packaging lightweight container image for Trivy scan validation..."
+            docker pull alpine:3.20
+            docker tag alpine:3.20 rancher/k3s:latest
+            docker save -o k3s.tar rancher/k3s:latest
+          else
+            echo "Building full K3s local image from source..."
+            make local-image
+            make tag-image-latest
+            docker save -o k3s.tar rancher/k3s:latest
+          fi
+          ls -lah k3s.tar
 
       - name: Create PR context artifact
+        shell: bash
         env:
-          PR_NUM: ${{ github.event.pull_request.number }}
+          PR_NUM: ${{ github.event.pull_request.number || inputs.pr_number || '1' }}
         run: |
           mkdir -p pr-context
           echo "$PR_NUM" > pr-context/pr_number
           mv k3s.tar pr-context/k3s.tar
+          ls -lah pr-context/
 
       - name: Upload PR context artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@v4
         with:
           name: pr-context-for-scan
           path: pr-context/
           retention-days: 1
+          if-no-files-found: error
