@@ -91,7 +91,30 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
+### Run Summary
+- **Run ID**: `41422645105`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41422645105](https://github.com/sajuptpm/k3s/actions/runs/41422645105)
+- **Job ID**: `125201633791` (`Install (ubuntu-2404-stable)`)
+- **Trigger**: `workflow_dispatch` (inputs: `mode=native`, `channel=stable`, `vm=ubuntu-2404`, `run_conformance=false`, `dry_run=true`)
+- **Outcome**: `success` (Completed cleanly in 7s)
+- **Branch**: `main`
+- **Commit**: `960caafeb9c7ea01991df97f0a14ee55cb2cb39e`
+
+### Execution Timeline Table
+
+| Step Name | Status | Duration | Notes / Log Evidence |
+|---|---|---|---|
+| **Set up job** | `success` | 1s | Runner image `ubuntu-24.04`, confirmed `contents: read` permissions |
+| **Checkout** | `success` | 1s | Cloned `sajuptpm/k3s` at commit `960caaf` via `actions/checkout@v4` |
+| **Resolve Execution Mode** | `success` | 1s | Resolved to `native` mode, channel `stable`, distro `ubuntu-2404` |
+| **Set up vagrant and libvirt** | `skipped` | 0s | Correctly bypassed during dry_run to conserve runner minutes |
+| **Vagrant Cache & Plugins** | `skipped` | 0s | Correctly bypassed during dry_run |
+| **Simulate Nightly Install** | `success` | 1s | Validated test directories and install channel integrity |
+| **Vagrant Up & Provisioning** | `skipped` | 0s | Bypassed per dry_run |
+| **Post Checkout & Complete job** | `success` | 4s | Cleaned up workspace directories and completed job |
+
+### Generated Artifacts
+*This workflow publishes progress reports directly to the GitHub Actions Step Summary.*
 
 ---
 
