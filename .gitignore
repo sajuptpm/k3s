@@ -38,3 +38,5 @@ config/local.tfvars
 *.tfstate
 .terraform.lock.hcl
 .DS_Store
+workflow-fixes/*.env
+!workflow-fixes/*.env.example
