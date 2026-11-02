@@ -80,17 +80,15 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
-
-- **Run ID**: Pending
-- **Run URL**: Pending
-- **Trigger**: `workflow_dispatch` (`mode=native`, `dry_run=true`)
-- **Outcome**: Pending
+- **Run ID**: `41424509462`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41424509462](https://github.com/sajuptpm/k3s/actions/runs/41424509462)
+- **Trigger**: `workflow_dispatch` (`mode=native`, `dry_run=true`, `days_before_issue_stale=45`, `days_before_issue_close=14`)
+- **Outcome**: **SUCCESS** (Executed in 6s, debug mode verified, audit step summary generated)
 
 ### Execution Timeline
 | Job | Status | Duration | Artifacts Produced |
 | :--- | :--- | :--- | :--- |
-| `stalebot` | Pending | - | Step Summary Audit Report |
+| `Stale Issues Management` | **Success** | 6s | Markdown Step Summary Audit Report |
 
 ---
 
