@@ -89,7 +89,38 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
+### Run Summary
+- **Run ID**: `41421765470`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41421765470](https://github.com/sajuptpm/k3s/actions/runs/41421765470)
+- **Job IDs**:
+  - `build / Build`: `125198731168` (completed in 17s)
+  - `Integration Tests (startup)`: `125198875693` (completed in 17s)
+- **Trigger**: `workflow_dispatch` (inputs: `mode=native`, `itest=startup`, `run_windows=false`, `dry_run=true`)
+- **Outcome**: `success` (All requested jobs completed cleanly in ~35s)
+- **Branch**: `main`
+- **Commit**: `9695a027814a09a5658e32c020dd7ccbf645dfa1`
+
+### Execution Timeline Table
+
+| Job / Step Name | Status | Duration | Notes / Log Evidence |
+|---|---|---|---|
+| **build / Build** | `success` | 17s | Called `build-k3s.yaml` in dry_run mode, produced `k3s-amd64` |
+| **build-windows** | `skipped` | 0s | Correctly skipped per `inputs.run_windows == false` |
+| **itest: Set up job** | `success` | 1s | Runner image `ubuntu-24.04`, confirmed `contents: read` permissions |
+| **itest: Checkout & Mode** | `success` | 1s | Cloned repo at `9695a02`, resolved mode `native` |
+| **itest: Install Go** | `success` | 3s | Installed Go toolchain and dependencies |
+| **itest: Download k3s binary** | `success` | 1s | Downloaded `k3s-amd64` artifact via `actions/download-artifact@v4` |
+| **itest: Run Integration Tests** | `success` | 1s | Simulated test execution, generated `startup.out` coverage profile |
+| **itest: Upload Codecov** | `skipped` | 0s | Safely skipped due to absent `CODECOV_TOKEN` |
+| **itest: Archive Coverage** | `success` | 2s | Uploaded `integration-startup-coverage` artifact via `actions/upload-artifact@v4` |
+| **itest: Complete job** | `success` | 8s | Process cleanup and job finalization |
+
+### Generated Artifacts
+
+| Artifact Name | Artifact ID | Size | Download Link |
+|---|---|---|---|
+| `k3s-amd64` | `13130306692` | 442 bytes | [Download Artifact 13130306692](https://github.com/sajuptpm/k3s/actions/runs/41421765470/artifacts/13130306692) |
+| `integration-startup-coverage` | `13130037386` | 207 bytes | [Download Artifact 13130037386](https://github.com/sajuptpm/k3s/actions/runs/41421765470/artifacts/13130306692) |
 
 ---
 
