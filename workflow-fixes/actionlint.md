@@ -90,7 +90,33 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
+### Run Summary
+- **Run ID**: `41411623104`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41411623104](https://github.com/sajuptpm/k3s/actions/runs/41411623104)
+- **Job ID**: `125165746118`
+- **Trigger**: `workflow_dispatch` (inputs: `mode=native`, `shellcheck=false`, `pyflakes=false`)
+- **Outcome**: `success` (Completed cleanly in 19s)
+- **Branch**: `main`
+- **Commit**: `b4e3d6e13268c78a142a3144b64c8ab9fce7e4df`
+
+### Execution Timeline Table
+
+| Step Name | Status | Duration | Notes / Log Evidence |
+|---|---|---|---|
+| **Set up job** | `success` | 2s | Runner image `ubuntu-24.04`, GITHUB_TOKEN read scopes confirmed |
+| **Checkout code** | `success` | 1s | Cloned `sajuptpm/k3s` at commit `b4e3d6e` via `actions/checkout@v4` |
+| **Resolve Execution Mode** | `success` | 1s | Resolved to `native` mode, generated GitHub step summary |
+| **actionlint (Original Mode)** | `skipped` | 0s | Correctly bypassed per conditional `steps.mode.outputs.resolved_mode == 'original'` |
+| **Setup actionlint (Native Alternative)** | `success` | 1s | Downloaded standalone `actionlint` binary from GitHub Releases to `$HOME/.local/bin` |
+| **actionlint (Native Alternative)** | `success` | 1s | Scanned all `.github/workflows/*.yaml` and `*.yml`, zero errors detected |
+| **Upload Lint Report (Native Alternative)** | `success` | 2s | Uploaded `workflow-reports/actionlint-report.txt` as artifact `actionlint-report` |
+| **Post Checkout code & Complete job** | `success` | 1s | Cleaned up workspace safe directories |
+
+### Generated Artifacts
+
+| Artifact Name | Artifact ID | Size | Download Link |
+|---|---|---|---|
+| `actionlint-report` | `13124869417` | 158 bytes | [Download Artifact 13124869417](https://github.com/sajuptpm/k3s/actions/runs/41411623104/artifacts/13124869417) |
 
 ---
 
