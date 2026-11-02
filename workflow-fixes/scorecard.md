@@ -87,17 +87,15 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
-
-- **Run ID**: Pending
-- **Run URL**: Pending
+- **Run ID**: `41424071563`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41424071563](https://github.com/sajuptpm/k3s/actions/runs/41424071563)
 - **Trigger**: `workflow_dispatch` (`mode=native`, `publish_results=false`)
-- **Outcome**: Pending
+- **Outcome**: **SUCCESS** (Analysis completed, step summary rendered, SARIF artifact uploaded, Code Scanning completed)
 
 ### Execution Timeline
 | Job | Status | Duration | Artifacts Produced |
 | :--- | :--- | :--- | :--- |
-| `analysis` | Pending | - | `scorecard-sarif` |
+| `Scorecard analysis` | **Success** | 40s | `scorecard-sarif` |
 
 ---
 
