@@ -129,11 +129,14 @@ jobs:
       - name: Download Rancher's VEX Hub report
         shell: bash
         run: |
-          curl -fsSO https://github.com/rancher/vexhub/raw/refs/heads/main/reports/rancher.openvex.json.gz || true
-          if [ -f rancher.openvex.json.gz ]; then
-            gzip -d rancher.openvex.json.gz
+          set -euo pipefail
+          echo "Downloading Rancher OpenVEX report..."
+          if curl -fsSL "https://raw.githubusercontent.com/rancher/vexhub/refs/heads/main/reports/rancher.openvex.json.gz" -o rancher.openvex.json.gz && gzip -t rancher.openvex.json.gz 2>/dev/null; then
+            gzip -d -f rancher.openvex.json.gz
+            echo "Successfully unpacked rancher.openvex.json ($(wc -c < rancher.openvex.json) bytes)."
           else
-            echo "{}" > rancher.openvex.json
+            echo "VEX report download failed or was invalid; generating empty OpenVEX structure..."
+            echo '{"@context": "https://openvex.dev/ns/v0.2.0", "statements": []}' > rancher.openvex.json
           fi
 
       - name: Run Trivy vulnerability scanner
