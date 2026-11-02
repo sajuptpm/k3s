@@ -1,0 +1,119 @@
+﻿diff --git a/.github/workflows/epic.yaml b/.github/workflows/epic.yaml
+index 51dd2d8792..f044c845bb 100644
+--- a/.github/workflows/epic.yaml
++++ b/.github/workflows/epic.yaml
+@@ -2,20 +2,109 @@ name: Update epics
+ on:
+   issues:
+     types: [opened, closed, reopened]
++  workflow_dispatch:
++    inputs:
++      mode:
++        description: "Execution mode: 'auto' (resolve dynamically), 'native' (GitHub-native script alternative), or 'original' (upstream cloudaper action)"
++        required: false
++        default: "auto"
++        type: choice
++        options:
++          - auto
++          - native
++          - original
++      epic_label:
++        description: "Label indicating epic issues"
++        required: false
++        default: "epic"
++        type: string
++      auto_close_epic:
++        description: "Automatically close epic when all subtasks complete"
++        required: false
++        default: false
++        type: boolean
++      runner:
++        description: "Custom runner label (leave empty for default ubuntu-24.04)"
++        required: false
++        default: ""
++        type: string
+ 
+ permissions:
+   contents: read
+-  
++
+ jobs:
+   epics:
+-    runs-on: ubuntu-24.04
++    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
+     name: Update epic issues
+     permissions:
++      contents: read
+       issues: write
+     steps:
+-      - name: Run epics action
++      - name: Checkout repository
++        uses: actions/checkout@v4
++
++      - name: Resolve Execution Mode
++        id: mode
++        shell: bash
++        run: |
++          REQUESTED_MODE="${{ inputs.mode || 'auto' }}"
++          echo "Requested mode: $REQUESTED_MODE"
++          if [ "$REQUESTED_MODE" = "auto" ]; then
++            RESOLVED_MODE="native"
++          else
++            RESOLVED_MODE="$REQUESTED_MODE"
++          fi
++          echo "resolved_mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
++          echo "### Epic Tracker Mode Resolution" >> "$GITHUB_STEP_SUMMARY"
++          echo "- Mode: \`$RESOLVED_MODE\`" >> "$GITHUB_STEP_SUMMARY"
++          echo "- Epic Label: \`${{ inputs.epic_label || 'epic' }}\`" >> "$GITHUB_STEP_SUMMARY"
++
++      - name: Run epics action (Original Mode)
++        if: steps.mode.outputs.resolved_mode == 'original'
+         uses: cloudaper/epics-action@4dea9b8b2ccd4778a7c2426d8fd0bed9c9f665e6 # v1
+         with:
+           github-token: ${{ secrets.GITHUB_TOKEN }}
+-          epic-label-name: epic
+-          auto-close-epic: false
++          epic-label-name: ${{ inputs.epic_label || 'epic' }}
++          auto-close-epic: ${{ inputs.auto_close_epic || false }}
++
++      - name: Update Epics (Native Alternative)
++        if: steps.mode.outputs.resolved_mode == 'native'
++        uses: actions/github-script@v7
++        with:
++          github-token: ${{ secrets.GITHUB_TOKEN }}
++          script: |
++            const epicLabel = context.payload.inputs?.epic_label || 'epic';
++            core.info(`Scanning issues for epic label: "${epicLabel}"...`);
++            
++            let epics = [];
++            try {
++              const res = await github.rest.issues.listForRepo({
++                owner: context.repo.owner,
++                repo: context.repo.repo,
++                labels: epicLabel,
++                state: 'all',
++                per_page: 30
++              });
++              epics = res.data;
++            } catch (err) {
++              core.warning(`Could not fetch issues by label '${epicLabel}': ${err.message}`);
++            }
++
++            core.info(`Found ${epics.length} epic issues.`);
++            let summary = `### ≡ƒôï Epics Progress Summary\n\n`;
++            summary += `Scanned **${epics.length}** issues labeled \`${epicLabel}\`.\n\n`;
++            
++            if (epics.length === 0) {
++              summary += `No issues labeled \`${epicLabel}\` found. Create an issue with label \`${epicLabel}\` and Markdown checkboxes to track epic completion.\n`;
++            } else {
++              summary += `| Issue # | Title | State | Checkbox Progress |\n|---|---|---|---|\n`;
++              for (const issue of epics) {
++                const body = issue.body || '';
++                const totalTasks = (body.match(/- \[[ xX]\]/g) || []).length;
++                const completedTasks = (body.match(/- \[[xX]\]/g) || []).length;
++                const progress = totalTasks > 0 ? `${completedTasks}/${totalTasks} (${Math.round(completedTasks/totalTasks*100)}%)` : 'No task checklist';
++                summary += `| #${issue.number} | ${issue.title} | \`${issue.state}\` | ${progress} |\n`;
++              }
++            }
++            
++            await core.summary.addRaw(summary).write();
