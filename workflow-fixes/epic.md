@@ -90,7 +90,28 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
+### Run Summary
+- **Run ID**: `41420097611`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41420097611](https://github.com/sajuptpm/k3s/actions/runs/41420097611)
+- **Job ID**: `125193302580`
+- **Trigger**: `workflow_dispatch` (inputs: `mode=native`, `epic_label=epic`)
+- **Outcome**: `success` (Completed cleanly in 7s)
+- **Branch**: `main`
+- **Commit**: `217f6d1ab0fb9eb0dbfa5b9b8702b85cf55799a4`
+
+### Execution Timeline Table
+
+| Step Name | Status | Duration | Notes / Log Evidence |
+|---|---|---|---|
+| **Set up job** | `success` | 2s | Runner image `ubuntu-24.04`, GITHUB_TOKEN `issues: write` scope confirmed |
+| **Checkout repository** | `success` | 1s | Cloned repository at commit `217f6d1` via `actions/checkout@v4` |
+| **Resolve Execution Mode** | `success` | 1s | Resolved to `native` mode, epic label `epic` |
+| **Run epics action (Original Mode)** | `skipped` | 0s | Correctly bypassed per conditional `steps.mode.outputs.resolved_mode == 'original'` |
+| **Update Epics (Native Alternative)** | `success` | 1s | Scanned issues via GitHub REST API and published summary table |
+| **Post Cleanups & Complete job** | `success` | 2s | Successfully cleaned up safe directories and finalized job |
+
+### Generated Artifacts
+*This workflow publishes progress reports directly to the GitHub Actions Step Summary.*
 
 ---
 
