@@ -93,7 +93,39 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
+### Run Summary
+- **Run ID**: `41412442200`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41412442200](https://github.com/sajuptpm/k3s/actions/runs/41412442200)
+- **Job ID**: `125168335737`
+- **Trigger**: `workflow_dispatch` (inputs: `mode=native`, `platforms=linux/amd64`, `dry_run=true`)
+- **Outcome**: `success` (Completed cleanly in 16s)
+- **Branch**: `main`
+- **Commit**: `001bec270dae2ecfa988ee52bb6c2e399589d81d`
+
+### Execution Timeline Table
+
+| Step Name | Status | Duration | Notes / Log Evidence |
+|---|---|---|---|
+| **Set up job** | `success` | 3s | Runner image `ubuntu-24.04`, GITHUB_TOKEN read scopes confirmed |
+| **Checkout K3s** | `success` | 1s | Cloned `sajuptpm/k3s` at commit `001bec2` via `actions/checkout@v4` |
+| **Resolve Execution Mode** | `success` | 1s | Resolved to `native` mode, platforms `linux/amd64`, dry_run `true` |
+| **Set up Docker (Original Mode)** | `skipped` | 0s | Correctly bypassed per conditional |
+| **Configure Native Docker & Containerd (Native Mode)** | `success` | 4s | Host Docker daemon reloaded with containerd snapshotter |
+| **Set up Docker Buildx** | `success` | 1s | Initialized buildx instance via `docker/setup-buildx-action@v4` |
+| **Determine Git Version Info** | `success` | 1s | Ran `scripts/git_version.sh` extracting git tag and commit SHA |
+| **Determine build platforms** | `success` | 1s | Resolved target artifact name `k3s-amd64` |
+| **Build K3s binaries** | `skipped` | 0s | Bypassed per `inputs.dry_run != true` |
+| **Mock K3s binaries (Dry Run)** | `success` | 1s | Created mock binary and archives for rapid verification |
+| **Calculate binary checksum** | `success` | 1s | Computed `k3s.sha256sum` |
+| **Save bin k3s binary** | `success` | 1s | Extracted and saved binary to `./dist/artifacts/bin-k3s` |
+| **Upload K3s Artifacts** | `success` | 1s | Uploaded `k3s-amd64` artifact via `actions/upload-artifact@v4` |
+| **Post Cleanups & Complete job** | `success` | 1s | Cleaned up buildx builder and workspace safe directories |
+
+### Generated Artifacts
+
+| Artifact Name | Artifact ID | Size | Download Link |
+|---|---|---|---|
+| `k3s-amd64` | `13125807754` | 442 bytes | [Download Artifact 13125807754](https://github.com/sajuptpm/k3s/actions/runs/41412442200/artifacts/13125807754) |
 
 ---
 
