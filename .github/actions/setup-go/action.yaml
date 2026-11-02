@@ -19,7 +19,7 @@ runs:
     - name: Find Latest Release Branch
       shell: bash
       run: |
-        LATEST_RELEASE_BRANCH=$(gh api repos/k3s-io/k3s/branches?per_page=100 --jq '[.[].name | select(startswith("release-"))] | sort_by(ltrimstr("release-") | tonumber) | last')
+        LATEST_RELEASE_BRANCH=$(gh api "repos/${{ github.repository }}/branches?per_page=100" --jq '[.[].name | select(startswith("release-"))] | sort_by(ltrimstr("release-") | tonumber) | last' 2>/dev/null || gh api repos/k3s-io/k3s/branches?per_page=100 --jq '[.[].name | select(startswith("release-"))] | sort_by(ltrimstr("release-") | tonumber) | last' 2>/dev/null || echo "release-1.32")
         echo "LATEST_RELEASE_REF=refs/heads/$LATEST_RELEASE_BRANCH" | tee -a "$GITHUB_ENV"
       env:
         GH_TOKEN: ${{ github.token }}
