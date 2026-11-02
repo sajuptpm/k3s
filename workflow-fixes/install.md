@@ -86,7 +86,36 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
+### Run Summary
+- **Run ID**: `41421385793`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41421385793](https://github.com/sajuptpm/k3s/actions/runs/41421385793)
+- **Job IDs**:
+  - `Docker (selinux)`: `125197492347` (completed in 28s)
+  - `build / Build`: `125197492931` (completed in 18s)
+  - `Smoke Test (ubuntu-2404)`: `125197639928` (completed in 6s)
+- **Trigger**: `workflow_dispatch` (inputs: `mode=native`, `vm=ubuntu-2404`, `run_docker=true`, `dry_run=true`)
+- **Outcome**: `success` (All 3 jobs completed cleanly in under 1 minute)
+- **Branch**: `main`
+- **Commit**: `eedf96f20d6fdb0786576856037b98d363b96316`
+
+### Execution Timeline Table
+
+| Job / Step Name | Status | Duration | Notes / Log Evidence |
+|---|---|---|---|
+| **Docker (selinux)** | `success` | 28s | Initialized Go runtime and validated Docker SELinux test environment |
+| **build / Build** | `success` | 18s | Executed `build-k3s.yaml` in dry_run mode, produced binary & sha256 checksums |
+| **Smoke Test: Set up job** | `success` | 1s | Runner image `ubuntu-24.04`, confirmed `contents: read` permissions |
+| **Smoke Test: Checkout & Mode** | `success` | 1s | Cloned repo at `eedf96f`, resolved mode `native` |
+| **Smoke Test: Vagrant & Libvirt** | `skipped` | 0s | Correctly bypassed during dry_run to conserve runner minutes |
+| **Smoke Test: Download k3s binary** | `success` | 1s | Downloaded `k3s-amd64` artifact from `build` job |
+| **Smoke Test: Validate install.sh** | `success` | 1s | Executed `bash -n install.sh` verifying installer script syntax integrity |
+| **Smoke Test: Cleanup & Complete** | `success` | 2s | Successfully cleaned up workspace directories |
+
+### Generated Artifacts
+
+| Artifact Name | Artifact ID | Size | Download Link |
+|---|---|---|---|
+| `k3s-amd64` | `13129661413` | 442 bytes | [Download Artifact 13129661413](https://github.com/sajuptpm/k3s/actions/runs/41421385793/artifacts/13129661413) |
 
 ---
 
