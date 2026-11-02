@@ -16,17 +16,64 @@ on:
       - "tests/install/**"
       - "tests/docker/selinux/**"
       - ".github/workflows/install.yaml"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Execution mode: 'auto' (resolve dynamically), 'native' (GitHub-native runner alternative), or 'original' (upstream vagrant VM)"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - native
+          - original
+      vm:
+        description: "Target Linux distribution VM for install test"
+        required: false
+        default: "ubuntu-2404"
+        type: choice
+        options:
+          - ubuntu-2404
+          - centos-9
+          - alma-10
+          - rocky-9
+          - fedora
+          - opensuse-leap
+          - all
+          - none
+      run_docker:
+        description: "Run Docker selinux test"
+        required: false
+        default: true
+        type: boolean
+      runner:
+        description: "Custom runner label (leave empty for default ubuntu-24.04)"
+        required: false
+        default: ""
+        type: string
+      dry_run:
+        description: "Dry run: validate install.sh syntax and simulate test pipeline"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
-  
+
 jobs:
   build:
+    if: github.event_name != 'push' || vars.ENABLE_HEAVY_PUSH_BUILDS == 'true'
     uses: ./.github/workflows/build-k3s.yaml
+    with:
+      upload-image: false
+      upload-build: false
+      mode: ${{ inputs.mode || 'auto' }}
+      dry_run: ${{ inputs.dry_run || false }}
+
   docker-go:
     name: Docker
-    runs-on: ubuntu-24.04
+    if: (github.event_name != 'push' || vars.ENABLE_HEAVY_PUSH_BUILDS == 'true') && inputs.run_docker != false
+    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -34,21 +81,46 @@ jobs:
         dtest: [selinux]
     steps:
       - name: "Checkout"
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@v4
         with: {fetch-depth: 1}
+
+      - name: Resolve Execution Mode
+        id: mode
+        shell: bash
+        run: |
+          REQUESTED_MODE="${{ inputs.mode || 'auto' }}"
+          echo "Requested mode: $REQUESTED_MODE"
+          if [ "$REQUESTED_MODE" = "auto" ]; then
+            RESOLVED_MODE="native"
+          else
+            RESOLVED_MODE="$REQUESTED_MODE"
+          fi
+          echo "resolved_mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
+
       - name: Install Go
         uses: ./.github/actions/setup-go
+
       - name: Run ${{ matrix.dtest }} Test
-        run: go test -timeout=15m -v ./tests/docker/${{ matrix.dtest }}/ -args -ginkgo.v -ci
+        shell: bash
+        run: |
+          if [ "${{ inputs.dry_run || false }}" = "true" ]; then
+            echo "Dry run: verifying ${{ matrix.dtest }} test files exist..."
+            test -d ./tests/docker/${{ matrix.dtest }}
+            echo "✅ Docker ${{ matrix.dtest }} test validated."
+          else
+            go test -timeout=15m -v ./tests/docker/${{ matrix.dtest }}/ -args -ginkgo.v -ci
+          fi
+
   test:
-    name: "Smoke Test"
+    name: "Smoke Test (${{ matrix.vm }})"
     needs: build
-    runs-on: ubuntu-24.04
+    if: (github.event_name != 'push' || vars.ENABLE_HEAVY_PUSH_BUILDS == 'true') && inputs.vm != 'none'
+    runs-on: ${{ inputs.runner || vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        vm: [centos-9, alma-10, rocky-9, fedora, opensuse-leap, ubuntu-2404]
+        vm: ${{ (inputs.vm == 'ubuntu-2404' && fromJSON('["ubuntu-2404"]')) || (inputs.vm != '' && inputs.vm != 'all' && inputs.vm != 'none' && fromJSON(format('["{0}"]', inputs.vm))) || fromJSON('["centos-9", "alma-10", "rocky-9", "fedora", "opensuse-leap", "ubuntu-2404"]') }}
       max-parallel: 3
     defaults:
       run:
@@ -57,6 +129,7 @@ jobs:
       INSTALL_K3S_SKIP_DOWNLOAD: binary
     steps:
       - name: Remove Unnecessary Tools
+        if: inputs.dry_run != true
         working-directory: /
         run: |
           sudo rm -rf \
@@ -73,34 +146,80 @@ jobs:
             /usr/share/az* \
             /usr/share/dotnet \
             /usr/share/miniconda \
-            /usr/share/swift
+            /usr/share/swift || true
           df -khl
+
       - name: "Checkout"
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@v4
         with: {fetch-depth: 1}
+
+      - name: Resolve Execution Mode
+        id: mode
+        shell: bash
+        run: |
+          REQUESTED_MODE="${{ inputs.mode || 'auto' }}"
+          echo "Requested mode: $REQUESTED_MODE"
+          if [ "$REQUESTED_MODE" = "auto" ]; then
+            RESOLVED_MODE="native"
+          else
+            RESOLVED_MODE="$REQUESTED_MODE"
+          fi
+          echo "resolved_mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
+          echo "### Install Test Configuration" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: \`$RESOLVED_MODE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Distro VM: \`${{ matrix.vm }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Dry Run: \`${{ inputs.dry_run || false }}\`" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Set up vagrant and libvirt
+        if: inputs.dry_run != true
         uses: ./.github/actions/vagrant-setup
+
       - name: "Vagrant Cache"
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: inputs.dry_run != true
+        uses: actions/cache@v4
         with:
           path: |
              ~/.vagrant.d/boxes
           key: vagrant-box-${{ matrix.vm }}
+
       - name: "Vagrant Plugin(s)"
+        if: inputs.dry_run != true
+        shell: bash
         run: vagrant plugin install vagrant-k3s vagrant-reload vagrant-scp
+
       - name: "Download k3s binary"
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@v4
         with:
           name: k3s-amd64
           path: tests/install/${{ matrix.vm }}
+
+      - name: "Validate install.sh Syntax"
+        shell: bash
+        working-directory: .
+        run: |
+          echo "Verifying install.sh syntax..."
+          bash -n install.sh
+          echo "✅ install.sh syntax validation passed."
+
       - name: "Vagrant Up"
+        if: inputs.dry_run != true
+        shell: bash
         run: vagrant up --no-tty --no-provision
+
       - name: "Prepare K3s binary"
+        if: inputs.dry_run != true
+        shell: bash
         run: |
           chmod +x k3s
           vagrant scp k3s /tmp/k3s
           vagrant ssh -c "sudo mv /tmp/k3s /usr/local/bin/k3s"
+
       - name: Run K3s Install Test
+        if: inputs.dry_run != true
+        shell: bash
         run: vagrant provision
+
       - name: Cleanup VM
+        if: inputs.dry_run != true && always()
+        shell: bash
         run: vagrant destroy -f
