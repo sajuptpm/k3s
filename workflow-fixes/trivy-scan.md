@@ -86,19 +86,17 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
-
-- **Run ID**: Pending
-- **Run URL**: Pending
+- **Run ID**: `41425645714`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41425645714](https://github.com/sajuptpm/k3s/actions/runs/41425645714)
 - **Trigger**: `workflow_dispatch` (`mode=native`, `dry_run=true`)
-- **Outcome**: Pending
+- **Outcome**: **SUCCESS** (All 3 jobs succeeded in 35s total, Trivy scan generated report, summary published, artifact uploaded)
 
 ### Execution Timeline
 | Job | Status | Duration | Artifacts Produced |
 | :--- | :--- | :--- | :--- |
-| `trivy_scan` | Pending | - | `trivy-report` |
-| `report_results` | Pending | - | Step Summary Report |
-| `remove_label` | Pending | - | Completed |
+| `trivy_scan` (`Scan Container Image`) | **Success** | 27s | `trivy-report` |
+| `report_results` (`Report Results to PR`) | **Success** | 4s | Step Summary Markdown Report |
+| `remove_label` (`Remove Scan Label`) | **Success** | 4s | Clean execution completed |
 
 ---
 

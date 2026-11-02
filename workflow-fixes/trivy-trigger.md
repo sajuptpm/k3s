@@ -80,17 +80,15 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live test execution)*
-
-- **Run ID**: Pending
-- **Run URL**: Pending
+- **Run ID**: `41425338422`
+- **Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/41425338422](https://github.com/sajuptpm/k3s/actions/runs/41425338422)
 - **Trigger**: `workflow_dispatch` (`mode=native`, `dry_run=true`, `pr_number=1`)
-- **Outcome**: Pending
+- **Outcome**: **SUCCESS** (Executed in 11s, actor authorized, lightweight image packaged into `k3s.tar`, artifact uploaded)
 
 ### Execution Timeline
 | Job | Status | Duration | Artifacts Produced |
 | :--- | :--- | :--- | :--- |
-| `trigger-scan` | Pending | - | `pr-context-for-scan` |
+| `trigger-scan` (`Prepare Trivy Scan Context`) | **Success** | 11s | `pr-context-for-scan` |
 
 ---
 
