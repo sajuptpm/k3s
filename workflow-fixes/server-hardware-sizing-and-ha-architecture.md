@@ -178,3 +178,148 @@ Below are the **two concrete hardware configurations** engineered to meet your d
 ### Strategic Recommendation
 1. If your team cannot tolerate any downtime during hardware maintenance or hypervisor updates, choose **Option 2 (2-Node HA Cluster)** for approximately **$5,200 – $7,000 USD** (refurbished enterprise).
 2. If maximum single-system storage capacity (~7.6 TB) and simplicity are prioritized, deploy **Option 1 (Single Powerhouse)** with 4x 3.84 TB NVMe in ZFS RAID-10 for **$4,250 – $5,800 USD**, paired with an external automated Proxmox Backup Server (PBS).
+
+---
+
+## 8. Deep Market Audit: Verifying the Initial $51,000 Single-Server Estimate
+
+### Evidence-Based Reality Check
+Your initial hardware configuration:
+- **CPU:** 96 Logical CPUs (48 Physical Cores with HT/SMT)
+- **RAM:** 384 GB ECC RAM
+- **Storage:** 2 TB NVMe SSDs
+- **User's Initial Price Estimate:** **$51,000 USD**
+
+### Component-by-Component Market Cost Verification
+Based on current 2025/2026 enterprise hardware market pricing across Dell Technologies, HPE, Supermicro, and authorized enterprise refurbished vendors:
+
+| Subsystem Component | Refurbished Enterprise (Grade A Certified, e.g. Dell R7525) | Brand New OEM (e.g. Dell PowerEdge R7625 / R7615) | What is Charged in a $51,000 OEM List Quote |
+| :--- | :---: | :---: | :--- |
+| **Server Chassis & Motherboard** | $1,200 – $1,500 | $3,500 – $4,800 | Full unnegotiated OEM MSRP list price ($8,000+) |
+| **Processor(s)** (48 Physical Cores total) | $900 – $1,300 *(Dual EPYC 7402/7443)* | $3,200 – $4,500 *(AMD EPYC 9454 48C/96T)* | OEM tray pricing marked up by 50–70% ($6,000+) |
+| **Memory** (384 GB ECC Registered) | $550 – $750 *(12x 32GB DDR4 ECC)* | $1,600 – $2,400 *(DDR5 ECC RDIMMs)* | OEM branded RAM marked up by 200–300% ($5,000+) |
+| **Storage** (2 TB NVMe SSDs) | $200 – $350 | $400 – $700 *(Enterprise U.2 NVMe)* | OEM branded SSDs marked up heavily ($1,500+) |
+| **Networking & Management** | $250 – $400 *(10/25GbE + iDRAC Ent.)* | $500 – $900 | iDRAC Enterprise license + 25GbE card ($1,800+) |
+| **Software Licensing** | **$0.00** *(Proxmox VE / KVM)* | **$0.00** *(Proxmox VE / KVM)* | **Bundled VMware vSphere / VCF licensing ($20,000 – $30,000 over 5 years)** |
+| **Support Warranty** | Included 1–3 yr seller warranty | $1,500 – $2,500 *(3-yr ProSupport)* | 5-Year ProSupport Plus 4-Hour Mission Critical ($6,000 – $9,000) |
+| **Total Subsystem Cost** | **$3,500 – $6,500 USD** | **$10,700 – $15,800 USD** | **$48,000 – $51,000+ USD** |
+
+### Why Was $51,000 Quoted Originally?
+1. **Unnegotiated OEM MSRP Sticker Shock:** Major server vendors (Dell, HPE, Lenovo) publish exorbitant list prices on their public websites. Enterprise procurement departments normally receive standard **55% to 70% discounts** off list prices upon engaging account managers or value-added resellers (VARs).
+2. **Bundled Proprietary Hypervisor Licensing:** Under Broadcom, VMware vSphere Foundation (VVF) and VMware Cloud Foundation (VCF) are billed per core per year on mandatory subscription terms. Licensing a 48-to-96 core server for 5 years with VMware costs **$20,000 to $35,000+ in software alone**.
+3. **Proprietary Vendor Support & Service Contracts:** A 5-year 24x7 4-hour on-site mission-critical SLA plus professional deployment services often adds **$8,000 to $12,000** to an enterprise quote.
+4. **Branded Flash Memory Markups:** Server OEMs frequently charge $1,200+ for a re-branded 1.92 TB NVMe drive that retails from Samsung or Micron for $250.
+
+> [!CAUTION]
+> **Verdict on the $51,000 Estimate:**
+> For pure hardware intended to run an open-source hypervisor (Proxmox VE), **$51,000 is grossly overpriced**:
+> - It is **3x to 4x higher** than the true street price of brand-new current-generation OEM enterprise hardware (**$12,000 – $16,000**).
+> - It is **8x to 10x higher** than certified Grade-A refurbished enterprise hardware (**$4,000 – $6,500**).
+
+---
+
+## 9. Requirements Mapping & Delta Cost Analysis for 2-Server HA Mode
+
+### Detailed Architectural Mapping
+You requested splitting the capacity into two physical servers to achieve true High Availability (HA) while incorporating all enterprise storage, boot, and network requirements:
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                        2-SERVER ACTIVE-ACTIVE HA CLUSTER ARCHITECTURE                  │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                        │
+│   ┌─────────────────────────────────────────┐   Dedicated 25GbE   ┌─────────────────────────────────────────┐   │
+│   │           PROXMOX NODE A (1U)           │   DAC Cable (Direct)│           PROXMOX NODE B (1U)           │   │
+│   ├─────────────────────────────────────────┤◄───────────────────►├─────────────────────────────────────────┤   │
+│   │ CPU:     1x AMD EPYC 7543P (32C / 64T)  │   ZFS Replication   │ CPU:     1x AMD EPYC 7543P (32C / 64T)  │   │
+│   │ RAM:     192 GB DDR4-3200 ECC (6x32GB)  │   (every 1 minute)  │ RAM:     192 GB DDR4-3200 ECC (6x32GB)  │   │
+│   │ Boot:    2x 480 GB SATA SSDs (RAID 1)   │                     │ Boot:    2x 480 GB SATA SSDs (RAID 1)   │   │
+│   │ Storage: 2x 3.84 TB U.2 NVMe (Mirror)   │   Corosync Heartbeat│ Storage: 2x 3.84 TB U.2 NVMe (Mirror)   │   │
+│   │ Network: Dual 25GbE SFP28 + Dual 1GbE   │                     │ Network: Dual 25GbE SFP28 + Dual 1GbE   │   │
+│   └────────────────────┬────────────────────┘                     └────────────────────┬────────────────────┘   │
+│                        │                                                               │                        │
+│                        │               10GbE / 1GbE LAN Switch Uplink                  │                        │
+│                        └──────────────────────────────┬────────────────────────────────┘                        │
+│                                                       │                                                         │
+│                                            ┌──────────┴──────────┐                                              │
+│                                            │  QDevice Witness    │                                              │
+│                                            │  Mini-PC / NUC      │                                              │
+│                                            │  (3rd Quorum Vote)  │                                              │
+│                                            └─────────────────────┘                                              │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 1. Splitting 96 Logical CPUs / 48 Physical Cores:
+- **Node A:** 1x AMD EPYC 7543P (32 Physical Cores / 64 Threads @ up to 4.0 GHz, 256MB L3 Cache).
+- **Node B:** 1x AMD EPYC 7543P (32 Physical Cores / 64 Threads @ up to 4.0 GHz, 256MB L3 Cache).
+- **Combined Cluster Capacity:** **64 Physical Cores / 128 Threads** (Provides 33% *more* CPU compute than the single-node 48-core spec, allowing comfortable N+1 failover headroom!).
+
+#### 2. Splitting 384 GB Memory:
+- **Node A:** 192 GB DDR4-3200 MHz ECC Registered (6x 32 GB RDIMMs).
+- **Node B:** 192 GB DDR4-3200 MHz ECC Registered (6x 32 GB RDIMMs).
+- **Combined Cluster Memory:** **384 GB RAM** (Maintains 100% of the planned memory capacity across the cluster).
+
+#### 3. Hypervisor OS Boot Redundancy:
+- **Configuration per Node:** Dedicated **2x 480 GB Enterprise SATA SSDs** in Hardware RAID 1 (Dell BOSS-S1/S2 controller or Supermicro SATA DOM mirror).
+- **Total across Cluster:** 4x 480 GB Enterprise SATA SSDs.
+- **Architectural Purpose:** Completely isolates hypervisor OS files, kernel logs, systemd journals, and Proxmox ISOs from the VM data pool. If a boot SSD fails, the server continues running without interruption.
+
+#### 4. VM Data Pool Storage Redundancy:
+- **Configuration per Node:** **2x 3.84 TB Enterprise U.2/U.3 PCIe 4.0 NVMe SSDs** in a **ZFS Mirror (RAID 1)**.
+- **Total across Cluster:** 4x 3.84 TB Enterprise U.2 NVMe SSDs.
+- **Usable Pool per Node:** **~3.84 TB raw usable** (~3.0 TB at safe 80% ZFS threshold).
+- **Data Protection:** Every minute, Proxmox's built-in **ZFS Storage Replication** takes a snapshot and synchronizes delta blocks across the direct 25GbE link from Node A to Node B (and vice-versa).
+
+#### 5. Proxmox VE Cost Breakdown:
+- **Base Hypervisor License:** **$0.00** (Full-featured open-source GNU AGPLv3 with clustering, live migration, and HA manager included with zero paywalls).
+- **Optional Enterprise Repository (Community Support Tier):**
+  - Cost: **€120 / CPU socket / year** (~$130 USD).
+  - Cluster Total (2 single-socket CPUs): **2 × €120 = €240 / year (~$260 USD / year total)**.
+  - Benefits: Access to vetted, enterprise-tested software updates and security patches.
+
+#### 6. Network Interconnect & Quorum:
+- **Interconnect NIC per Node:** Dual-Port 10G/25G SFP28 PCIe adapter (Mellanox ConnectX-4 Lx or Intel E810).
+  - **Port 1 (Direct-Connect):** Linked directly between Node A and Node B via a **1-meter Direct Attach Copper (DAC) cable ($30)**. Bypasses external network switches completely, providing a dedicated 25 Gbps low-latency pipe for Corosync cluster messaging and continuous 1-minute ZFS disk replication.
+  - **Port 2 (LAN Uplink):** Connected to the corporate/lab switch for VM traffic and developer access.
+- **Quorum Witness (QDevice):** In a 2-node cluster, if one node drops, the remaining node only has 1 out of 2 votes (50%), which cannot establish quorum to prevent split-brain. A low-cost mini-PC (Intel NUC or Raspberry Pi 4, **~$120–$180**) running `corosync-qnetd` acts as an external 3rd voting member.
+
+---
+
+### Delta Cost Analysis: 1 Server vs. 2-Server HA Mode
+
+How much extra does it cost to build a true 2-Server HA architecture compared to a single server?
+
+| Infrastructure Item | Single Powerhouse Server (1 Node, 2U) | 2-Server HA Cluster Pair (2 Nodes, 2x 1U + QDevice) | Net Extra Cost for 2-Server HA Mode |
+| :--- | :---: | :---: | :---: |
+| **Chassis & Power Supplies** | 1x 2U Chassis + 2x PSUs ($1,300–$1,600 ref) | 2x 1U Chassis + 4x PSUs ($1,800–$2,400 ref) | **+$500 to +$800** |
+| **Processors** | Dual EPYC 7543 / 7402 ($900–$1,400 ref) | 2x Single EPYC 7543P ($1,100–$1,600 ref) | **+$200 to +$300** *(1-socket CPUs are cheaper per core)* |
+| **Memory (384 GB Total)** | 384 GB (12x 32GB) ($550–$750 ref) | 2x 192 GB (12x 32GB) ($550–$750 ref) | **$0.00** *(Identical RAM module count)* |
+| **Boot Redundancy** | 2x 480 GB SATA SSDs ($150–$200 ref) | 4x 480 GB SATA SSDs ($280–$360 ref) | **+$130 to +$160** |
+| **Data Pool Storage** | 4x 3.84 TB NVMe SSDs ($1,100–$1,450 ref) | 4x 3.84 TB NVMe SSDs ($1,100–$1,450 ref) | **$0.00** *(Identical drive count)* |
+| **Networking & Cables** | 1x Dual-Port 25GbE NIC ($150–$250 ref) | 2x Dual-Port 25GbE NICs + DAC ($250–$350 ref) | **+$100 to +$150** |
+| **Quorum Witness (QDevice)** | Not required ($0) | 1x Intel NUC / Mini-PC ($120–$180 new) | **+$120 to +$180** |
+| **Proxmox Enterprise License** | 2 sockets = €240/yr (~$260/yr) | 2 sockets = €240/yr (~$260/yr) | **$0.00** *(Identical 2 sockets total)* |
+| **Total Refurbished Cost** | **$4,250 – $5,800 USD** | **$5,200 – $7,090 USD** | **+$950 to +$1,290 USD total (~20% increase)** |
+| **Total Brand New OEM Cost** | **$10,750 – $15,100 USD** | **$12,180 – $16,450 USD** | **+$1,430 to +$2,200 USD total (~15% increase)** |
+| **Comparison to $51,000 Quote**| **Saves $35,900 – $46,750** | **Saves $34,550 – $45,800** | **Massive savings while gaining true zero-downtime HA!** |
+
+---
+
+## 10. Engineering Checklist: What Else Might Be Missed?
+
+To ensure your high-availability deployment succeeds in production without surprises, verify these four critical operational dimensions:
+
+1. **Recovery Point Objective (RPO) vs. Recovery Time Objective (RTO):**
+   - In a 2-node shared-nothing cluster using ZFS replication over 25GbE, data is synchronized every **1 minute**. 
+   - **RPO:** **1 minute** (in the worst-case scenario where Node A experiences a sudden catastrophic power loss, uncommitted disk writes from the last 60 seconds are lost).
+   - **RTO:** **60 to 90 seconds** (Proxmox HA manager detects the node failure after 3 missed Corosync heartbeats and automatically boots the VMs on Node B).
+   - *Note:* If strict 0-second RPO (synchronous lockstep mirroring) is mandatory, you would need either a 3-node Ceph hyperconverged storage cluster or an external shared NVMe-oF/iSCSI SAN array. For software development and CI/CD test workloads, 1-minute asynchronous ZFS replication is the enterprise industry standard.
+2. **Dual Power Circuit & PDU Segregation:**
+   - Both servers feature dual 80-Plus Platinum/Titanium redundant power supplies.
+   - Connect PSU 1 of both servers to **PDU A (UPS Circuit 1)** and PSU 2 of both servers to **PDU B (UPS Circuit 2 / Utility)**. This prevents a tripped breaker or failing PDU from cutting power to both cluster nodes at once.
+3. **Out-of-Band Management (iDRAC9 Enterprise / IPMI):**
+   - Ensure each server's dedicated management NIC is assigned a static IP on an isolated management VLAN. This ensures full remote access (virtual KVM console, remote power cycle, OS reinstall, hardware sensor monitoring) even if the main network interface or hypervisor OS crashes.
+4. **Dedicated External Backup Target (Proxmox Backup Server - PBS):**
+   - High availability (HA) protects against hardware faults, but **it does not protect against accidental VM deletion, ransomware, or corrupted database states**.
+   - Deploy **Proxmox Backup Server (PBS)** on an inexpensive existing NAS, workstation, or secondary server. PBS provides client-side encryption, high deduplication, and hourly incremental backups with zero impact on running VMs.
+
