@@ -2,6 +2,7 @@ name: Update epics
 on:
   issues:
     types: [opened, closed, reopened]
+  workflow_dispatch: {}
 
 permissions:
   contents: read

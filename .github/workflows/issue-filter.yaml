@@ -3,6 +3,7 @@ name: Issue Filter
 on:
   issues:
     types: [opened]
+  workflow_dispatch: {}
 
 permissions:
   contents: read
