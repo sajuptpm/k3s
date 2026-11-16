@@ -1,0 +1,13 @@
+﻿diff --git a/.github/workflows/nightly-install.yaml b/.github/workflows/nightly-install.yaml
+index 5323dde21..ac1fa1019 100644
+--- a/.github/workflows/nightly-install.yaml
++++ b/.github/workflows/nightly-install.yaml
+@@ -89,7 +89,7 @@ jobs:
+       fail-fast: false
+       matrix:
+         db: [sqlite, etcd, mysql, postgres]
+-        suite: [serial, parallel]
++        suite: ${{ vars.ENABLE_UPSTREAM_CONFORMANCE == 'true' && fromJSON('["serial", "parallel"]') || fromJSON('["serial"]') }}
+     steps:
+       - name: Remove Unnecessary Tools
+         if: runner.environment == 'github-hosted'

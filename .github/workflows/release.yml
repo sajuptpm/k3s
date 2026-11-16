@@ -88,10 +88,15 @@ jobs:
       # For forks, setup DockerHub login with GHA secrets
       - name: Login to DockerHub with GHA Secrets
         if: ${{ vars.ENABLE_UPSTREAM_RELEASE != 'true' }}
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
+        run: |
+          if [ -n "$DOCKER_USERNAME" ] && [ -n "$DOCKER_TOKEN" ]; then
+            echo "$DOCKER_TOKEN" | docker login -u "$DOCKER_USERNAME" --password-stdin
+          else
+            echo "No DockerHub credentials provided, skipping DockerHub login. GHCR will be used."
+          fi
 
       - name: Login to Staging Registry
         if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' }}

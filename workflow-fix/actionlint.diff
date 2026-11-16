@@ -1,0 +1,12 @@
+diff --git a/.github/workflows/actionlint.yaml b/.github/workflows/actionlint.yaml
+index 5e9581d1e..9651dc1b0 100644
+--- a/.github/workflows/actionlint.yaml
++++ b/.github/workflows/actionlint.yaml
+@@ -3,6 +3,7 @@ on:
+   pull_request:
+     paths:
+       - ".github/workflows/*"
++  workflow_dispatch: {}
+ 
+ permissions:
+   contents: read

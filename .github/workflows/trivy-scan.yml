@@ -56,7 +56,7 @@ jobs:
 
       - name: Download Rancher's VEX Hub report
         run: |
-          curl -fsSO https://github.com/rancher/vexhub/raw/refs/heads/main/reports/rancher.openvex.json.gz
+          curl -fsSLO https://github.com/rancher/vexhub/raw/refs/heads/main/reports/rancher.openvex.json.gz
           gzip -d rancher.openvex.json.gz
 
       - name: Run Trivy vulnerability scanner

@@ -1,0 +1,12 @@
+diff --git a/.github/workflows/issue-filter.yaml b/.github/workflows/issue-filter.yaml
+index 3bea1d065..703a501de 100644
+--- a/.github/workflows/issue-filter.yaml
++++ b/.github/workflows/issue-filter.yaml
+@@ -3,6 +3,7 @@ name: Issue Filter
+ on:
+   issues:
+     types: [opened]
++  workflow_dispatch: {}
+ 
+ permissions:
+   contents: read
