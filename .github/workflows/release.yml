@@ -119,7 +119,8 @@ jobs:
       - name: Configure image tags
         id: tag_config
         run: |
-          TAG=${GITHUB_REF#refs/tags/}
+          TAG="${{ inputs.tag || github.ref_name }}"
+          TAG="${TAG#refs/tags/}"
           
           # Base configuration - always transform the main tag
           # Transforms v1.32.4-rc1+k3s1 → v1.32.4-rc1-k3s1
@@ -138,10 +139,13 @@ jobs:
         run: |
           if [ "${{ github.repository_owner }}" == "k3s-io" ]; then
             echo "DOCKERHUB_ORG=rancher" >> $GITHUB_ENV
+            echo "ENABLE_DOCKERHUB=true" >> $GITHUB_ENV
           elif [ -n "${{ secrets.DOCKER_USERNAME }}" ]; then
             echo "DOCKERHUB_ORG=${{ secrets.DOCKER_USERNAME }}" >> $GITHUB_ENV
+            echo "ENABLE_DOCKERHUB=true" >> $GITHUB_ENV
           else
             echo "DOCKERHUB_ORG=${{ github.repository_owner }}" >> $GITHUB_ENV
+            echo "ENABLE_DOCKERHUB=false" >> $GITHUB_ENV
           fi
 
       - name: Extract Docker metadata
@@ -150,7 +154,7 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/k3s
-            docker.io/${{ env.DOCKERHUB_ORG }}/k3s
+            name=docker.io/${{ env.DOCKERHUB_ORG }}/k3s,enable=${{ env.ENABLE_DOCKERHUB == 'true' }}
             name=${{ env.REGISTRY }}/rancher/k3s,enable=${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' && !contains(github.ref_name, '-rc') }}
             name=${{ env.STAGING_REGISTRY }}/rancher/k3s,enable=${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' }}
           flavor: latest=false
@@ -178,7 +182,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            TAG=${{ github.ref_name }}
+            TAG=${{ inputs.tag || github.ref_name }}
 
   build-airgap:
     name: Airgap Image Tarballs
