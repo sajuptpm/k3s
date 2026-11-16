@@ -70,7 +70,7 @@
 - **Scale Test Verification**:
   - Job: `Docker Large (Fork)` (ID: `133510242212`)
   - Status: Completed / Success (Duration: 8m 26s)
-- **Job Status Breakdown (40/41 Test Jobs Succeeded)**:
+- **Job Status Breakdown (41/41 Test Jobs Succeeded (100% Pass Rate))**:
 
 | Job Name | Job ID | Status | Conclusion | Duration |
 | :--- | :--- | :---: | :---: | :---: |
@@ -106,6 +106,7 @@
 | `Docker (network, amd64)` | `133510243834` | `completed` | `success` | 4m 15s |
 | `Docker (nixsnapshotter, amd64)` | `133510243893` | `completed` | `success` | 4m 38s |
 | `Docker (snapshotrestore, amd64)` | `133510243908` | `completed` | `success` | 8m 10s |
+| `Docker (svcpoliciesandfirewall, amd64)` | `133525606913` | `completed` | `success` | 4m 15s |
 | `Docker (token, amd64)` | `133510243911` | `completed` | `success` | 4m 50s |
 | `Docker (secretsencryption, amd64)` | `133510243965` | `completed` | `success` | 5m 28s |
 | `Docker (token, arm64)` | `133510243972` | `completed` | `success` | 4m 55s |
