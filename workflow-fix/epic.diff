@@ -1,0 +1,12 @@
+diff --git a/.github/workflows/epic.yaml b/.github/workflows/epic.yaml
+index 51dd2d879..55e8ab49c 100644
+--- a/.github/workflows/epic.yaml
++++ b/.github/workflows/epic.yaml
+@@ -2,6 +2,7 @@ name: Update epics
+ on:
+   issues:
+     types: [opened, closed, reopened]
++  workflow_dispatch: {}
+ 
+ permissions:
+   contents: read

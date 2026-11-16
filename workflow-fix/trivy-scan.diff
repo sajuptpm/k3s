@@ -1,0 +1,32 @@
+diff --git a/.github/workflows/trivy-scan.yml b/.github/workflows/trivy-scan.yml
+index 4aaf4a957..8fd28fb74 100644
+--- a/.github/workflows/trivy-scan.yml
++++ b/.github/workflows/trivy-scan.yml
+@@ -56,7 +56,7 @@ jobs:
+ 
+       - name: Download Rancher's VEX Hub report
+         run: |
+-          curl -fsSO https://github.com/rancher/vexhub/raw/refs/heads/main/reports/rancher.openvex.json.gz
++          curl -fsSLO https://github.com/rancher/vexhub/raw/refs/heads/main/reports/rancher.openvex.json.gz
+           gzip -d rancher.openvex.json.gz
+ 
+       - name: Run Trivy vulnerability scanner
+@@ -100,6 +100,10 @@ jobs:
+           SCAN_RESULT: ${{ needs.trivy_scan.result }}
+           PR_NUMBER: ${{ needs.trivy_scan.outputs.pr_number }}
+         run: |
++          if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" -le 0 ] 2>/dev/null; then
++            echo "No PR number provided (dispatched test), skipping PR comment"
++            exit 0
++          fi
+           if [[ "$SCAN_RESULT" == "failure" ]]; then
+             gh issue comment $PR_NUMBER -b ":x: Trivy scan action failed, check logs :x:"
+             exit 0
+@@ -128,4 +132,6 @@ jobs:
+           GH_REPO: ${{ github.repository }}
+           PR_NUMBER: ${{ needs.trivy_scan.outputs.pr_number }}
+         run: |
+-          gh pr edit $PR_NUMBER --remove-label "scan-with-trivy"
++          if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" -gt 0 ] 2>/dev/null; then
++            gh pr edit $PR_NUMBER --remove-label "scan-with-trivy"
++          fi

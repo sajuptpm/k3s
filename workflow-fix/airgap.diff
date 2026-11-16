@@ -1,0 +1,12 @@
+diff --git a/.github/workflows/airgap.yaml b/.github/workflows/airgap.yaml
+index dd912a518..7db150273 100644
+--- a/.github/workflows/airgap.yaml
++++ b/.github/workflows/airgap.yaml
+@@ -6,6 +6,7 @@ on:
+       - "scripts/airgap/image-list.txt"
+       - ".github/workflows/airgap.yaml"
+   workflow_call: {}
++  workflow_dispatch: {}
+ 
+ permissions:
+   contents: read

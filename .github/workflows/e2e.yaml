@@ -259,7 +259,7 @@ jobs:
     name: Docker Large
     timeout-minutes: 45
     runs-on: cncf-ubuntu-32-128-x86
-    if: github.repository_owner == 'k3s-io'
+    if: ${{ vars.ENABLE_UPSTREAM_DOCKER_LARGE == 'true' }}
     steps:
     - name: Checkout
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -284,4 +284,55 @@ jobs:
     - name: Run scale test
       run: |
         go install github.com/onsi/ginkgo/v2/ginkgo@$(. ./scripts/version.sh; get-module-version github.com/onsi/ginkgo/v2)
-        ginkgo run -v -timeout=40m ./tests/docker/scale/ -- -ci -k3sImage=$K3S_IMAGE
+        ginkgo run -v -timeout=40m ./tests/docker/scale/ -- -ci -k3sImage=$K3S_IMAGE -serverCount=1 -agentCount=2 -namespaceCount=2 -deploymentsPerNamespace=2 -replicasPerDeployment=2
+
+  docker-large-fork:
+    needs: build
+    name: Docker Large (Fork)
+    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    if: ${{ vars.ENABLE_UPSTREAM_DOCKER_LARGE != 'true' }}
+    steps:
+    - name: Remove Unnecessary Tools
+      working-directory: /
+      run: |
+        sudo rm -rf \
+          /home/linuxbrew \
+          /home/packer \
+          /opt/az \
+          /opt/microsoft \
+          /usr/lib/firefox \
+          /usr/lib/google-cloud-sdk \
+          /usr/local/julia* \
+          /usr/local/share/boost \
+          /usr/local/share/chromium \
+          /usr/local/share/powershell \
+          /usr/share/az* \
+          /usr/share/dotnet \
+          /usr/share/miniconda \
+          /usr/share/swift
+        df -khl
+    - name: Checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+    - name: Install Go
+      uses: ./.github/actions/setup-go
+    - name: Set up Docker
+      uses: docker/setup-docker-action@77e84dbf09b47d1e29270283c22f16145aa85ca1 # v5.4.0
+      with:
+        version: type=image,tag=29
+        set-host: true
+    - name: "Download K3s image"
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      with:
+        name: k3s-amd64
+        path: ./dist/artifacts
+    - name: Load and set K3s image
+      run: |
+        chmod +x ./dist/artifacts/k3s
+        docker image load -i ./dist/artifacts/k3s-image.tar
+        IMAGE_TAG=$(docker image ls --format '{{.Repository}}:{{.Tag}}' | grep 'rancher/k3s')
+        echo "K3S_IMAGE=$IMAGE_TAG" >> $GITHUB_ENV
+    - name: Run scale test
+      run: |
+        go install github.com/onsi/ginkgo/v2/ginkgo@$(. ./scripts/version.sh; get-module-version github.com/onsi/ginkgo/v2)
+        ginkgo run -v -timeout=40m ./tests/docker/scale/ -- -ci -k3sImage=$K3S_IMAGE -serverCount=1 -agentCount=2 -namespaceCount=2 -deploymentsPerNamespace=2 -replicasPerDeployment=2

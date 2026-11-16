@@ -1,0 +1,200 @@
+diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+index c9f1e2776..ab111a611 100644
+--- a/.github/workflows/release.yml
++++ b/.github/workflows/release.yml
+@@ -4,6 +4,12 @@ on:
+   push:
+     tags:
+     - "v*"
++  workflow_dispatch:
++    inputs:
++      tag:
++        description: "Release tag (e.g. v1.32.4+k3s1). Required for manual dispatch."
++        required: true
++        type: string
+ 
+ permissions:
+   contents: read
+@@ -48,7 +54,7 @@ jobs:
+ 
+       - name: Read registry secrets (staging)
+         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+-        if: ${{ github.repository_owner == 'k3s-io' }}
++        if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' }}
+         with:
+           secrets: |
+             secret/data/github/repo/${{ github.repository }}/k3s-suse-registry-stg/credentials registry | STAGING_REGISTRY ;
+@@ -57,7 +63,7 @@ jobs:
+ 
+       - name: Read registry secrets (prime)
+         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+-        if: ${{ !contains(github.ref_name, '-rc') && github.repository_owner == 'k3s-io' }}
++        if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' && !contains(github.ref_name, '-rc') }}
+         with:
+           secrets: |
+             secret/data/github/repo/${{ github.repository }}/k3s-suse-registry/credentials registry | REGISTRY ;
+@@ -65,7 +71,7 @@ jobs:
+             secret/data/github/repo/${{ github.repository }}/k3s-suse-registry/credentials password | REGISTRY_PASSWORD
+ 
+       - name: "Read Vault secrets"
+-        if: github.repository_owner == 'k3s-io'
++        if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' }}
+         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+         with:
+           secrets: |
+@@ -73,7 +79,7 @@ jobs:
+             secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials password | DOCKER_TOKEN ;
+     
+       - name: Login to DockerHub with Rancher Secrets
+-        if: github.repository_owner == 'k3s-io'
++        if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' }}
+         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+         with:
+           username: ${{ env.DOCKER_USERNAME }}
+@@ -81,14 +87,19 @@ jobs:
+ 
+       # For forks, setup DockerHub login with GHA secrets
+       - name: Login to DockerHub with GHA Secrets
+-        if: github.repository_owner != 'k3s-io'
+-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+-        with:
+-          username: ${{ secrets.DOCKER_USERNAME }}
+-          password: ${{ secrets.DOCKER_TOKEN }}
++        if: ${{ vars.ENABLE_UPSTREAM_RELEASE != 'true' }}
++        env:
++          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
++          DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
++        run: |
++          if [ -n "$DOCKER_USERNAME" ] && [ -n "$DOCKER_TOKEN" ]; then
++            echo "$DOCKER_TOKEN" | docker login -u "$DOCKER_USERNAME" --password-stdin
++          else
++            echo "No DockerHub credentials provided, skipping DockerHub login. GHCR will be used."
++          fi
+ 
+       - name: Login to Staging Registry
+-        if: github.repository_owner == 'k3s-io'
++        if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' }}
+         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+         with:
+           registry: ${{ env.STAGING_REGISTRY }}
+@@ -96,7 +107,7 @@ jobs:
+           password: ${{ env.STAGING_REGISTRY_PASSWORD }}
+ 
+       - name: Login to Prime Registry
+-        if: ${{ !contains(github.ref_name, '-rc') && github.repository_owner == 'k3s-io' }}
++        if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' && !contains(github.ref_name, '-rc') }}
+         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+         with:
+           registry: ${{ env.REGISTRY }}
+@@ -113,7 +124,8 @@ jobs:
+       - name: Configure image tags
+         id: tag_config
+         run: |
+-          TAG=${GITHUB_REF#refs/tags/}
++          TAG="${{ inputs.tag || github.ref_name }}"
++          TAG="${TAG#refs/tags/}"
+           
+           # Base configuration - always transform the main tag
+           # Transforms v1.32.4-rc1+k3s1 → v1.32.4-rc1-k3s1
+@@ -132,8 +144,13 @@ jobs:
+         run: |
+           if [ "${{ github.repository_owner }}" == "k3s-io" ]; then
+             echo "DOCKERHUB_ORG=rancher" >> $GITHUB_ENV
+-          else
++            echo "ENABLE_DOCKERHUB=true" >> $GITHUB_ENV
++          elif [ -n "${{ secrets.DOCKER_USERNAME }}" ]; then
+             echo "DOCKERHUB_ORG=${{ secrets.DOCKER_USERNAME }}" >> $GITHUB_ENV
++            echo "ENABLE_DOCKERHUB=true" >> $GITHUB_ENV
++          else
++            echo "DOCKERHUB_ORG=${{ github.repository_owner }}" >> $GITHUB_ENV
++            echo "ENABLE_DOCKERHUB=false" >> $GITHUB_ENV
+           fi
+ 
+       - name: Extract Docker metadata
+@@ -142,9 +159,9 @@ jobs:
+         with:
+           images: |
+             ghcr.io/${{ github.repository_owner }}/k3s
+-            docker.io/${{ env.DOCKERHUB_ORG }}/k3s
+-            name=${{ env.REGISTRY }}/rancher/k3s,enable=${{ !contains(github.ref_name, '-rc') && github.repository_owner == 'k3s-io' }}
+-            name=${{ env.STAGING_REGISTRY }}/rancher/k3s,enable=${{ github.repository_owner == 'k3s-io' }}
++            name=docker.io/${{ env.DOCKERHUB_ORG }}/k3s,enable=${{ env.ENABLE_DOCKERHUB == 'true' }}
++            name=${{ env.REGISTRY }}/rancher/k3s,enable=${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' && !contains(github.ref_name, '-rc') }}
++            name=${{ env.STAGING_REGISTRY }}/rancher/k3s,enable=${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' }}
+           flavor: latest=false
+           tags: ${{ steps.tag_config.outputs.tag_spec }}
+       
+@@ -170,7 +187,7 @@ jobs:
+           tags: ${{ steps.meta.outputs.tags }}
+           labels: ${{ steps.meta.outputs.labels }}
+           build-args: |
+-            TAG=${{ github.ref_name }}
++            TAG=${{ inputs.tag || github.ref_name }}
+ 
+   build-airgap:
+     name: Airgap Image Tarballs
+@@ -189,7 +206,7 @@ jobs:
+ 
+     - name: Read Prime artifacts secrets
+       uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+-      if: ${{ github.repository_owner == 'k3s-io' }}
++      if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' }}
+       with:
+         secrets: |
+           secret/data/github/repo/${{ github.repository }}/prime-artifacts-uploader/credentials accessKeyId | AWS_ACCESS_KEY_ID ;
+@@ -198,21 +215,21 @@ jobs:
+ 
+     - name: Read registry secrets (staging)
+       uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+-      if: ${{ contains(github.ref_name, '-rc') && github.repository_owner == 'k3s-io' }}
++      if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' && contains(github.ref_name, '-rc') }}
+       with:
+         secrets: |
+           secret/data/github/repo/${{ github.repository }}/k3s-suse-registry-stg/credentials registry | REGISTRY
+ 
+     - name: Read registry secrets (prime)
+       uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+-      if: ${{ !contains(github.ref_name, '-rc') && github.repository_owner == 'k3s-io' }}
++      if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' && !contains(github.ref_name, '-rc') }}
+       with:
+         secrets: |
+           secret/data/github/repo/${{ github.repository }}/k3s-suse-registry/credentials registry | REGISTRY
+ 
+     - name: Configure AWS Credentials (s3)
+       uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6
+-      if: ${{ github.repository_owner == 'k3s-io' }}
++      if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' }}
+       with:
+         aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+         aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+@@ -248,16 +265,19 @@ jobs:
+     - name: Create Pre-Release with Assets
+       env:
+         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+-      run: gh release create -R "${GITHUB_REPOSITORY}" --prerelease --generate-notes "${GITHUB_REF_NAME}" "${GITHUB_WORKSPACE}"/dist/artifacts/k3s* "${GITHUB_WORKSPACE}"/dist/artifacts/sha256sum*
++        TAG: ${{ inputs.tag || github.ref_name }}
++      run: |
++        TAG="${TAG#refs/tags/}"
++        gh release create -R "${GITHUB_REPOSITORY}" --clobber --prerelease --generate-notes "${TAG}" "${GITHUB_WORKSPACE}"/dist/artifacts/k3s* "${GITHUB_WORKSPACE}"/dist/artifacts/sha256sum*
+ 
+     - name: Update Image Registry for Prime/Staging
+-      if: ${{ github.repository_owner == 'k3s-io' }}
++      if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' }}
+       env:
+         REGISTRY: ${{ env.REGISTRY }}
+       run: sed -i "s|docker.io|${REGISTRY}|g" dist/artifacts/k3s-images.txt
+ 
+     - name: Upload Assets to S3
+-      if: ${{ github.repository_owner == 'k3s-io' }}
++      if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' }}
+       env:
+         BUCKET: ${{ env.PRIME_ARTIFACTS_BUCKET_NAME }}
+       run: |
+@@ -267,6 +287,7 @@ jobs:
+   dispatch-k3s-upgrade:
+     name: Dispatch k3s-upgrade Workflow
+     runs-on: ubuntu-24.04
++    if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' }}
+     needs: [upload-release-assets]
+     steps:
+       - name: Dispatch k3s-upgrade Workflow
