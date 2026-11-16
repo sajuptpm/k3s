@@ -265,7 +265,10 @@ jobs:
     - name: Create Pre-Release with Assets
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: gh release create -R "${GITHUB_REPOSITORY}" --prerelease --generate-notes "${GITHUB_REF_NAME}" "${GITHUB_WORKSPACE}"/dist/artifacts/k3s* "${GITHUB_WORKSPACE}"/dist/artifacts/sha256sum*
+        TAG: ${{ inputs.tag || github.ref_name }}
+      run: |
+        TAG="${TAG#refs/tags/}"
+        gh release create -R "${GITHUB_REPOSITORY}" --clobber --prerelease --generate-notes "${TAG}" "${GITHUB_WORKSPACE}"/dist/artifacts/k3s* "${GITHUB_WORKSPACE}"/dist/artifacts/sha256sum*
 
     - name: Update Image Registry for Prime/Staging
       if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' }}

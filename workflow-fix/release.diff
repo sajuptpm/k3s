@@ -1,5 +1,5 @@
 diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
-index c9f1e2776..53988d598 100644
+index c9f1e2776..ab111a611 100644
 --- a/.github/workflows/release.yml
 +++ b/.github/workflows/release.yml
 @@ -4,6 +4,12 @@ on:
@@ -167,8 +167,15 @@ index c9f1e2776..53988d598 100644
        with:
          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-@@ -251,13 +268,13 @@ jobs:
-       run: gh release create -R "${GITHUB_REPOSITORY}" --prerelease --generate-notes "${GITHUB_REF_NAME}" "${GITHUB_WORKSPACE}"/dist/artifacts/k3s* "${GITHUB_WORKSPACE}"/dist/artifacts/sha256sum*
+@@ -248,16 +265,19 @@ jobs:
+     - name: Create Pre-Release with Assets
+       env:
+         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+-      run: gh release create -R "${GITHUB_REPOSITORY}" --prerelease --generate-notes "${GITHUB_REF_NAME}" "${GITHUB_WORKSPACE}"/dist/artifacts/k3s* "${GITHUB_WORKSPACE}"/dist/artifacts/sha256sum*
++        TAG: ${{ inputs.tag || github.ref_name }}
++      run: |
++        TAG="${TAG#refs/tags/}"
++        gh release create -R "${GITHUB_REPOSITORY}" --clobber --prerelease --generate-notes "${TAG}" "${GITHUB_WORKSPACE}"/dist/artifacts/k3s* "${GITHUB_WORKSPACE}"/dist/artifacts/sha256sum*
  
      - name: Update Image Registry for Prime/Staging
 -      if: ${{ github.repository_owner == 'k3s-io' }}
@@ -183,7 +190,7 @@ index c9f1e2776..53988d598 100644
        env:
          BUCKET: ${{ env.PRIME_ARTIFACTS_BUCKET_NAME }}
        run: |
-@@ -267,6 +284,7 @@ jobs:
+@@ -267,6 +287,7 @@ jobs:
    dispatch-k3s-upgrade:
      name: Dispatch k3s-upgrade Workflow
      runs-on: ubuntu-24.04
