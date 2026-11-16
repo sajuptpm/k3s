@@ -100,6 +100,10 @@ jobs:
           SCAN_RESULT: ${{ needs.trivy_scan.result }}
           PR_NUMBER: ${{ needs.trivy_scan.outputs.pr_number }}
         run: |
+          if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" -le 0 ] 2>/dev/null; then
+            echo "No PR number provided (dispatched test), skipping PR comment"
+            exit 0
+          fi
           if [[ "$SCAN_RESULT" == "failure" ]]; then
             gh issue comment $PR_NUMBER -b ":x: Trivy scan action failed, check logs :x:"
             exit 0
@@ -128,4 +132,6 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ needs.trivy_scan.outputs.pr_number }}
         run: |
-          gh pr edit $PR_NUMBER --remove-label "scan-with-trivy"
+          if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" -gt 0 ] 2>/dev/null; then
+            gh pr edit $PR_NUMBER --remove-label "scan-with-trivy"
+          fi

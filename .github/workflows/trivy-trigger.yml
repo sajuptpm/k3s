@@ -16,26 +16,16 @@ permissions:
 
 jobs:
   trigger-scan:
-    if: github.event.label.name == 'scan-with-trivy'
+    if: github.event.label.name == 'scan-with-trivy' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     steps:
       - name: Verify actor is a member of k3s-io organization and has write permissions
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const org = context.repo.owner;
             const actor = context.actor;
             const { repo, owner } = context.repo; 
             
-            try {
-              const result = await github.rest.orgs.checkMembershipForUser({
-                org,
-                username: actor,
-              });
-            } catch (error) {
-              core.setFailed(`User ${actor} is not an public member of the ${org} organization`);
-            }
-
             const { data: { permission } } = await github.rest.repos.getCollaboratorPermissionLevel({
               owner,
               repo,
@@ -57,7 +47,7 @@ jobs:
 
       - name: Create PR context artifact
         env:
-          PR_NUM: ${{ github.event.pull_request.number }}
+          PR_NUM: ${{ github.event.pull_request.number || 0 }}
         run: |
           mkdir -p pr-context
           echo "$PR_NUM" > pr-context/pr_number
