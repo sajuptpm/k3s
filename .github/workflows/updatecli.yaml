@@ -38,14 +38,6 @@ jobs:
         include:
           - branch: main
             helm_controller_pattern: "*"
-          - branch: release-1.37
-            helm_controller_pattern: "~0.17"
-          - branch: release-1.36
-            helm_controller_pattern: "~0.17"
-          - branch: release-1.35
-            helm_controller_pattern: "~0.17"
-          - branch: release-1.34
-            helm_controller_pattern: "~0.16"
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

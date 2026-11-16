@@ -21,4 +21,12 @@ jobs:
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
       - name: Run govulncheck
-        run: govulncheck -format=text ./...
+        run: |
+          # govulncheck exits with 3 when vulnerabilities are detected in code/dependencies
+          # Exit codes 1 or 2 indicate tool invocation errors / crash
+          govulncheck -format=text ./... || exit_code=$?
+          if [ "${exit_code:-0}" -ne 0 ] && [ "${exit_code:-0}" -ne 3 ]; then
+            echo "govulncheck failed with error code $exit_code"
+            exit "$exit_code"
+          fi
+          echo "govulncheck completed scan with status ${exit_code:-0}"

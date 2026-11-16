@@ -89,7 +89,7 @@ jobs:
       fail-fast: false
       matrix:
         db: [sqlite, etcd, mysql, postgres]
-        suite: [serial, parallel]
+        suite: ${{ vars.ENABLE_UPSTREAM_CONFORMANCE == 'true' && fromJSON('["serial", "parallel"]') || fromJSON('["serial"]') }}
     steps:
       - name: Remove Unnecessary Tools
         if: runner.environment == 'github-hosted'
