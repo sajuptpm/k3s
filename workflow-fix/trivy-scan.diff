@@ -1,4 +1,4 @@
-﻿diff --git a/.github/workflows/trivy-scan.yml b/.github/workflows/trivy-scan.yml
+diff --git a/.github/workflows/trivy-scan.yml b/.github/workflows/trivy-scan.yml
 index 4aaf4a957..8fd28fb74 100644
 --- a/.github/workflows/trivy-scan.yml
 +++ b/.github/workflows/trivy-scan.yml

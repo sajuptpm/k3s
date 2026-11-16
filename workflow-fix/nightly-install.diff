@@ -1,4 +1,4 @@
-﻿diff --git a/.github/workflows/nightly-install.yaml b/.github/workflows/nightly-install.yaml
+diff --git a/.github/workflows/nightly-install.yaml b/.github/workflows/nightly-install.yaml
 index 5323dde21..ac1fa1019 100644
 --- a/.github/workflows/nightly-install.yaml
 +++ b/.github/workflows/nightly-install.yaml

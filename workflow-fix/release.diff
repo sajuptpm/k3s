@@ -1,4 +1,4 @@
-﻿diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
 index c9f1e2776..53988d598 100644
 --- a/.github/workflows/release.yml
 +++ b/.github/workflows/release.yml
@@ -95,7 +95,7 @@ index c9f1e2776..53988d598 100644
 +          TAG="${TAG#refs/tags/}"
            
            # Base configuration - always transform the main tag
-           # Transforms v1.32.4-rc1+k3s1 ΓåÆ v1.32.4-rc1-k3s1
+           # Transforms v1.32.4-rc1+k3s1 → v1.32.4-rc1-k3s1
 @@ -132,8 +144,13 @@ jobs:
          run: |
            if [ "${{ github.repository_owner }}" == "k3s-io" ]; then

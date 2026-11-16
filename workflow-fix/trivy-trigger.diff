@@ -1,4 +1,4 @@
-﻿diff --git a/.github/workflows/trivy-trigger.yml b/.github/workflows/trivy-trigger.yml
+diff --git a/.github/workflows/trivy-trigger.yml b/.github/workflows/trivy-trigger.yml
 index 4cdcc094e..27c9beafd 100644
 --- a/.github/workflows/trivy-trigger.yml
 +++ b/.github/workflows/trivy-trigger.yml

@@ -1,4 +1,4 @@
-﻿diff --git a/.github/workflows/scorecard.yml b/.github/workflows/scorecard.yml
+diff --git a/.github/workflows/scorecard.yml b/.github/workflows/scorecard.yml
 index 8e464ef2d..e671ee7e3 100644
 --- a/.github/workflows/scorecard.yml
 +++ b/.github/workflows/scorecard.yml
