@@ -287,15 +287,30 @@ jobs:
   dispatch-k3s-upgrade:
     name: Dispatch k3s-upgrade Workflow
     runs-on: ubuntu-24.04
-    if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' }}
     needs: [upload-release-assets]
     steps:
       - name: Dispatch k3s-upgrade Workflow
+        env:
+          K3S_UPGRADE_PAT: ${{ secrets.K3S_UPGRADE_PAT }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          curl -L -XPOST \
+          if [ -z "$K3S_UPGRADE_PAT" ]; then
+            echo "::warning::K3S_UPGRADE_PAT secret is not configured. Skipping dispatch to k3s-upgrade."
+            exit 0
+          fi
+          TAG="${TAG#refs/tags/}"
+          echo "Dispatching tag-release event to https://api.github.com/repos/${{ github.repository_owner }}/k3s-upgrade/dispatches with tag ${TAG}..."
+          HTTP_CODE=$(curl -s -w "%{http_code}" -o response.json -L -XPOST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.K3S_UPGRADE_PAT }}" \
+            -H "Authorization: Bearer ${K3S_UPGRADE_PAT}" \
             -H "Content-Type: application/json" \
-            https://api.github.com/repos/${{ github.repository_owner }}/k3s-upgrade/dispatches \
-            -d '{"event_type":"tag-release","client_payload":{"tag":"${{ github.ref_name }}"}}'
+            "https://api.github.com/repos/${{ github.repository_owner }}/k3s-upgrade/dispatches" \
+            -d "{\"event_type\":\"tag-release\",\"client_payload\":{\"tag\":\"${TAG}\"}}")
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "Successfully dispatched tag-release to ${{ github.repository_owner }}/k3s-upgrade (HTTP $HTTP_CODE)"
+          else
+            echo "::error::Failed to dispatch to k3s-upgrade (HTTP $HTTP_CODE):"
+            cat response.json
+            exit 1
+          fi
 

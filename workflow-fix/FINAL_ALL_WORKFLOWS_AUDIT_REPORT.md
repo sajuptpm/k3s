@@ -98,8 +98,12 @@ Every single one of the 20 workflows has been audited, adapted, actionlint-valid
 | `ENABLE_UPSTREAM_RELEASE` | Repository Variable | Gates internal Rancher Vault, Prime registry, and S3 uploads | `'false'` |
 | `ENABLE_UPSTREAM_CONFORMANCE` | Repository Variable | Gates resource-intensive parallel conformance matrix | Optional / default `'false'` |
 | `GITHUB_TOKEN` | Built-in Secret | GHCR image push, GitHub Release creation, artifact management | Injected automatically |
-| `DOCKER_USERNAME` / `DOCKER_TOKEN` | Repository Secret | Optional DockerHub authentication for forks | Optional (falls back to GHCR) |
+| `DOCKER_USERNAME` / `DOCKER_TOKEN` | Repository Secret | DockerHub authentication for release images | Configured (pushed to `docker.io/sajuptpm/k3s`) |
+| `K3S_UPGRADE_PAT` | Repository Secret | Dispatches companion `sajuptpm/k3s-upgrade` repository | Configurable PAT (`repo` scope) |
 | `SCORECARD_TOKEN` | Repository Secret | Optional PAT for OpenSSF Scorecard branch protection analysis | Optional (falls back to `GITHUB_TOKEN`) |
+
+> [!NOTE]
+> For a detailed audit of all skipped actions, release impacts, and companion repository setup for `k3s-upgrade`, refer to [FORK_RELEASE_AND_CREDENTIALS_AUDIT.md](file:///e:/projects/k3s/workflow-fix/FORK_RELEASE_AND_CREDENTIALS_AUDIT.md).
 
 ---
 
