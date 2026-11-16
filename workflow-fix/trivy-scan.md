@@ -64,8 +64,17 @@
 ---
 
 ## 6. Verification Proof
-- **Trigger Run ID**: `43927166230` (`Trivy Scan Trigger` successfully completed in 8m 17s).
-- **Workflow Run ID**: `43928610242` ([https://github.com/sajuptpm/k3s/actions/runs/43928610242](https://github.com/sajuptpm/k3s/actions/runs/43928610242)).
-- **Root Cause & Fix Confirmed**:
-  - Log confirmed `gzip: rancher.openvex.json.gz: unexpected end of file` due to curl redirect without `-L`.
-  - Fix verified with `curl.exe -fsSL -I https://raw.githubusercontent.com/rancher/vexhub/refs/heads/main/reports/rancher.openvex.json.gz` (HTTP 200 OK, 4.5 MB).
+- **Trigger Run ID**: `43942980108` (`Trivy Scan Trigger` successfully completed on `main` in 7m 54s).
+- **Workflow Run ID**: `43944596768` ([https://github.com/sajuptpm/k3s/actions/runs/43944596768](https://github.com/sajuptpm/k3s/actions/runs/43944596768))
+- **Branch**: `main`
+- **Trigger**: `workflow_run`
+- **Conclusion**: `SUCCESS` (100% of jobs passed)
+- **Job Status Breakdown**:
+
+| Job Name | Job ID | Status | Conclusion | Duration | Note |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| `trivy_scan` | `133570751238` | `completed` | `success` | 1m 8s | Followed 302 redirect via `-fsSLO`, decompressed VEX report, ran Trivy scanner, uploaded `trivy-report` |
+| `remove_label` | `133573723434` | `completed` | `success` | 4s | Cleanly handled non-PR execution |
+| `report_results` | `133573723566` | `completed` | `success` | 6s | Cleanly handled non-PR execution without errors |
+
+- **Artifacts Verified**: `trivy-report` generated and downloaded (`trivy-report.txt` containing full security audit of `bin/cni`, `bin/containerd-shim-runc-v2`, `bin/k3s`, and `bin/runc`).

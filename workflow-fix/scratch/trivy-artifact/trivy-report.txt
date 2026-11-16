@@ -1,0 +1,75 @@
+
+Report Summary
+
+┌─────────────────────────────┬──────────┬─────────────────┬─────────┐
+│           Target            │   Type   │ Vulnerabilities │ Secrets │
+├─────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ bin/cni                     │ gobinary │        0        │    -    │
+├─────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ bin/containerd-shim-runc-v2 │ gobinary │        1        │    -    │
+├─────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ bin/k3s                     │ gobinary │        1        │    -    │
+├─────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ bin/runc                    │ gobinary │        1        │    -    │
+└─────────────────────────────┴──────────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+For OSS Maintainers: VEX Notice
+--------------------------------
+If you're an OSS maintainer and Trivy has detected vulnerabilities in your project that you believe are not actually exploitable, consider issuing a VEX (Vulnerability Exploitability eXchange) statement.
+VEX allows you to communicate the actual status of vulnerabilities in your project, improving security transparency and reducing false positives for your users.
+Learn more and start using VEX: https://trivy.dev/docs/v0.70/guide/supply-chain/vex/repo#publishing-vex-documents
+
+To disable this notice, set the TRIVY_DISABLE_VEX_NOTICE environment variable.
+
+
+bin/containerd-shim-runc-v2 (gobinary)
+======================================
+Total: 1 (HIGH: 1, CRITICAL: 0)
+
+┌──────────────────┬────────────────┬──────────┬────────┬───────────────────┬───────────────┬─────────────────────────────────────────────────────────┐
+│     Library      │ Vulnerability  │ Severity │ Status │ Installed Version │ Fixed Version │                          Title                          │
+├──────────────────┼────────────────┼──────────┼────────┼───────────────────┼───────────────┼─────────────────────────────────────────────────────────┤
+│ golang.org/x/net │ CVE-2026-78661 │ HIGH     │ fixed  │ v0.60.0           │ 0.62.0        │ golang.org/x/net/html: golang.org/x/net/html: Denial of │
+│                  │                │          │        │                   │               │ Service via crafted HTML input                          │
+│                  │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-78661              │
+└──────────────────┴────────────────┴──────────┴────────┴───────────────────┴───────────────┴─────────────────────────────────────────────────────────┘
+
+bin/k3s (gobinary)
+==================
+Total: 1 (HIGH: 1, CRITICAL: 0)
+
+┌──────────────────┬────────────────┬──────────┬────────┬───────────────────┬───────────────┬─────────────────────────────────────────────────────────┐
+│     Library      │ Vulnerability  │ Severity │ Status │ Installed Version │ Fixed Version │                          Title                          │
+├──────────────────┼────────────────┼──────────┼────────┼───────────────────┼───────────────┼─────────────────────────────────────────────────────────┤
+│ golang.org/x/net │ CVE-2026-78661 │ HIGH     │ fixed  │ v0.60.0           │ 0.62.0        │ golang.org/x/net/html: golang.org/x/net/html: Denial of │
+│                  │                │          │        │                   │               │ Service via crafted HTML input                          │
+│                  │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-78661              │
+└──────────────────┴────────────────┴──────────┴────────┴───────────────────┴───────────────┴─────────────────────────────────────────────────────────┘
+
+Suppressed Vulnerabilities (Total: 3)
+=====================================
+┌──────────────────────────┬────────────────┬──────────┬──────────────┬─────────────────────────────┬──────────────────────┐
+│         Library          │ Vulnerability  │ Severity │    Status    │          Statement          │        Source        │
+├──────────────────────────┼────────────────┼──────────┼──────────────┼─────────────────────────────┼──────────────────────┤
+│ github.com/docker/docker │ CVE-2026-41567 │ HIGH     │ not_affected │ vulnerable_code_not_present │ rancher.openvex.json │
+│                          ├────────────────┤          │              │                             │                      │
+│                          │ CVE-2026-42306 │          │              │                             │                      │
+├──────────────────────────┼────────────────┤          │              │                             │                      │
+│ golang.org/x/crypto      │ CVE-2026-56854 │          │              │                             │                      │
+└──────────────────────────┴────────────────┴──────────┴──────────────┴─────────────────────────────┴──────────────────────┘
+
+bin/runc (gobinary)
+===================
+Total: 1 (HIGH: 1, CRITICAL: 0)
+
+┌──────────────────┬────────────────┬──────────┬────────┬───────────────────┬───────────────┬─────────────────────────────────────────────────────────┐
+│     Library      │ Vulnerability  │ Severity │ Status │ Installed Version │ Fixed Version │                          Title                          │
+├──────────────────┼────────────────┼──────────┼────────┼───────────────────┼───────────────┼─────────────────────────────────────────────────────────┤
+│ golang.org/x/net │ CVE-2026-78661 │ HIGH     │ fixed  │ v0.60.0           │ 0.62.0        │ golang.org/x/net/html: golang.org/x/net/html: Denial of │
+│                  │                │          │        │                   │               │ Service via crafted HTML input                          │
+│                  │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-78661              │
+└──────────────────┴────────────────┴──────────┴────────┴───────────────────┴───────────────┴─────────────────────────────────────────────────────────┘
