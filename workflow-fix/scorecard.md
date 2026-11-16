@@ -62,6 +62,14 @@
 
 ## 6. Verification Proof
 - **Workflow State**: Enabled (`gh workflow enable scorecard.yml`), Actionlint validated (0 errors).
-- **Execution Characteristics**:
-  - Run ID on branch attempt: `43926242826` (verified that OpenSSF binary strictly mandates execution on the repository default branch `main`).
-  - Upon merge to `main`, the scheduled and push triggers run cleanly.
+- **Execution Run ID**: `43942961585`
+- **Direct Run URL**: [https://github.com/sajuptpm/k3s/actions/runs/43942961585](https://github.com/sajuptpm/k3s/actions/runs/43942961585)
+- **Branch**: `main`
+- **Duration**: 45s
+- **Job Status Breakdown**:
+
+| Job Name | Job ID | Status | Conclusion | Duration | Artifacts Uploaded |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| `Scorecard analysis` | `133565034665` | `completed` | `success` | 45s | `SARIF file` (`results.sarif`) |
+
+- **Security Scanning Upload**: Verified SARIF upload to GitHub Code Scanning dashboard via `github/codeql-action/upload-sarif`.
