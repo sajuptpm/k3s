@@ -1,216 +1,223 @@
-# Universal Master Prompt: Fork Workflow Audit, Adaptation, Testing, and Verification for Any GitHub Project
+# Universal Master Prompt: Fork CI/CD Workflow Audit, Adaptation, Testing, and Verification for Any GitHub Project
 
 > **Compatibility**: 100% Universal and Language-Agnostic. Applies to Go, Rust, Python, Node.js/TypeScript, Java/JVM, C/C++, Kubernetes-native, Microservices, and Web projects.
-> **How to Use**: Copy and paste the prompt block below into any AI agent (Claude Code, Antigravity, OpenCode, VSCode Copilot, Cursor, etc.) when onboarding ANY newly forked GitHub repository.
+> **How to Use**: Copy and paste the prompt block below into any AI agent (Claude Code, Antigravity, OpenCode, VSCode Copilot, Cursor, etc.) when auditing or repairing GitHub Actions workflows in ANY newly forked GitHub repository.
 
 ---
 
 ```markdown
 # MISSION: Universal Fork CI/CD Workflow Audit, Adaptation, Verification, and Documentation
 
-You are tasked with auditing, adapting, testing, and thoroughly documenting ALL GitHub Actions CI/CD workflows in this forked repository so that 100% of workflows execute genuinely, cleanly, and reproducibly in a personal or organizational fork.
+You are an autonomous DevOps & CI/CD engineer tasked with auditing, fixing, testing, and thoroughly documenting every GitHub Actions workflow in this forked repository so that all workflows execute cleanly, genuinely, and reproducibly in this fork.
 
 ---
 
-## 1. ABSOLUTE CONSTRAINTS & ANTI-CHEATING POLICY (STRICT ENFORCEMENT)
+## 1. ENVIRONMENT & BASELINE SETUP (STEP 0)
 
-1. **Zero Cheating / No Test Skipping**:
-   - You MUST NOT disable tests using `if: false`, commenting out steps, deleting test files, or removing assertions.
-   - You MUST NOT add blanket `continue-on-error: true` to suppress failing test steps.
-   - All tests (unit, integration, e2e), linters, binary builds, container image packaging, and security scans MUST execute genuinely and generate real artifacts.
-2. **Preserve Baseline Integrity**:
-   - At Step 0, capture the base commit:
+Before modifying any workflow file, you must establish the baseline:
+1. **Clean Workspace & Baseline Hash**:
+   - Verify `git status` is clean.
+   - Record the exact baseline commit hash:
      ```bash
-     git rev-parse HEAD > workflow-fix/.base_commit
+     BASE_COMMIT=$(git rev-parse HEAD)
+     mkdir -p workflow-fix
+     echo "$BASE_COMMIT" > workflow-fix/.base_commit
      ```
-   - Store this baseline commit as `$BASE_COMMIT`.
-   - ALL diff deliverables (`workflow-fix/<name>.diff`) MUST be generated strictly and cumulatively against this exact `$BASE_COMMIT` using:
+   - **CRITICAL**: Never lose this hash—ALL final `.diff` files must be generated strictly and cumulatively against `$BASE_COMMIT`.
+2. **Fork Identification**:
+   - Verify GitHub CLI authentication: `gh auth status`
+   - Identify the current fork repository:
      ```bash
-     git diff --output=workflow-fix/<name>.diff $BASE_COMMIT..HEAD -- .github/workflows/<file>
+     gh repo view --json nameWithOwner -q .nameWithOwner
      ```
-   - Every patch must apply cleanly against `$BASE_COMMIT`:
+3. **Inventory & Workflow Unlocking**:
+   - Inventory all YAML files inside `.github/workflows/`.
+   - List all workflows and their state: `gh workflow list -a`
+   - Enable all workflows that GitHub automatically disabled upon forking (`disabled_fork`):
      ```bash
-     git apply --check --allow-empty workflow-fix/<name>.diff
+     gh workflow enable <workflow-name-or-file>
      ```
-3. **Credentials & Secrets Security**:
-   - NEVER hardcode credentials, passwords, or personal access tokens into git commits, workflow YAML files, or scripts.
-   - Sensitive credentials (Docker tokens, GitHub PATs, AWS/GCP keys, package registry tokens) MUST be stored via GitHub Secrets:
+4. **Audit Branch Creation**:
+   - Create a dedicated working branch:
      ```bash
-     echo "<TOKEN>" | gh secret set <SECRET_NAME> --repo <OWNER>/<REPO>
+     git checkout -b workflow-fix/audit-all-workflows
      ```
-   - Non-sensitive feature toggles and flags MUST be set via GitHub Variables:
-     ```bash
-     gh variable set <VAR_NAME> --body "false" --repo <OWNER>/<REPO>
-     ```
-4. **Actionlint Static Validation**:
-   - Every single modified workflow file MUST pass actionlint with 0 errors before triggering:
-     ```bash
-     actionlint .github/workflows/<file>
-     ```
+   - Open a Pull Request early against the default branch (`main` or `master`) to track check runs.
 
 ---
 
-## 2. UNIVERSAL FORK FAILURE PATTERNS & BATTLE-TESTED FIXES
+## 2. STRICT ANTI-CHEATING & FORK ADAPTATION RULES
 
-Across any GitHub project (Go, Python, Node, Rust, Java, etc.), forked workflows commonly fail for the same architectural reasons. Apply these battle-tested patterns:
+- **NO BLIND SKIPPING**: You are strictly forbidden from silently disabling, commenting out, or bypassing failing jobs/steps using `if: false`, `continue-on-error: true`, `--skip-tests`, or deleting test/build logic just to force a green checkmark.
+- **GENUINE EXECUTION**: Every workflow must execute its actual intended build, lint, test, image push, or release logic. Inspect run logs (`gh run view <id> --log`) to confirm jobs executed and succeeded (`completed` / `success`), not `skipped`.
+- **STANDARD FORK ADAPTATION**:
+  - Replace hardcoded upstream checks (e.g. `github.repository == 'upstream-org/repo'` or `github.repository_owner == 'upstream-org'`) with dynamic fork checks (`github.repository == '<OWNER/REPO>'` or `${{ github.repository }}`).
+  - Redirect container image pushes (Docker Hub / upstream private registries) to GitHub Container Registry (`ghcr.io/${{ github.repository_owner }}/<repo>`) using `GITHUB_TOKEN` or fork secrets.
+  - Replace specialized upstream self-hosted runners with appropriate GitHub-hosted runners (`ubuntu-latest`, `ubuntu-24.04-arm`, `windows-latest`, `macos-latest`).
+  - Add disk space cleanup steps before heavy compilation/docker packaging jobs (e.g. removing unused toolchains and running `df -khl`).
+  - Add `workflow_dispatch` triggers (with sensible default inputs) to workflows that lack them so every workflow can be triggered and tested individually on demand.
+- **IMPOSSIBLE UPSTREAM JOBS -> FEATURE-FLAGGED ALTERNATE JOBS**:
+  - If a specific upstream job is genuinely impossible to execute in a fork environment due to hard external dependencies you cannot provision (e.g. triggering private downstream repos, proprietary upstream S3/cloud infrastructure, or specialized bare-metal hardware unavailable on GitHub-hosted runners):
+    1. **Keep the original job intact** in the workflow, gated behind a clear repository variable / dispatch flag:
+       ```yaml
+       if: ${{ vars.ENABLE_UPSTREAM_<JOB_KEY> == 'true' || inputs.enable_upstream_<job_key> == true }}
+       ```
+       Default that repository variable to `'false'` via `gh variable set ENABLE_UPSTREAM_<JOB_KEY> --body "false"`.
+    2. **Create a dedicated Fork-Equivalent Alternate Job** (e.g. `<job-name>-fork`) gated by the inverse condition:
+       ```yaml
+       if: ${{ vars.ENABLE_UPSTREAM_<JOB_KEY> != 'true' }}
+       ```
+       that fulfills the equivalent goal for this fork's release model (e.g. publishing binaries/checksums/images to GitHub Releases and GHCR instead of upstream S3/Docker Hub, or running containerized/calibrated integration verification).
+    3. Test and prove that the **fork-equivalent alternate job** executes and passes completely.
 
-### A. Upstream Organization Gates
-- **Symptom**: `if: github.repository_owner == 'upstream-org'` or `if: github.repository == 'upstream-org/repo'` causes entire jobs or steps to be skipped in forks.
-- **Fix**: Replace hardcoded organization checks with repository variables or dynamic context:
-  ```yaml
-  # Allow fork maintainers to control corporate infrastructure via variable:
-  if: ${{ vars.ENABLE_UPSTREAM_RELEASE == 'true' }}
-  ```
-  Or target the current fork owner dynamically:
-  ```yaml
-  image: ghcr.io/${{ github.repository_owner }}/my-app
-  ```
+---
 
-### B. Self-Hosted & Enterprise Runner Dependencies
-- **Symptom**: Jobs configured with `runs-on: [self-hosted, linux, bare-metal]` or custom organization fleet labels remain queued indefinitely in forks.
-- **Fix**: Provide a dual-path architecture:
-  1. Keep upstream job for upstream fleets behind `if: ${{ vars.ENABLE_UPSTREAM_RUNNERS == 'true' }}`.
-  2. Create a fork-adapted job targeting GitHub-hosted standard runners (`ubuntu-24.04`, `ubuntu-24.04-arm`, `windows-latest`, `macos-latest`) with `if: ${{ vars.ENABLE_UPSTREAM_RUNNERS != 'true' }}`.
-  3. If tests are resource-intensive, calibrate concurrency (e.g. run suites serially or calibrate scale test parameters) so they succeed reliably within standard GitHub runner limits.
+## 3. SECRETS, VARIABLES, AND RELEASES POLICY
 
-### C. Missing Upstream Secrets & Registries
-- **Symptom**: Steps crash because upstream secrets (Vault AppRoles, AWS S3 keys, SonarQube tokens, commercial package registries) do not exist in the fork.
-- **Fix**:
-  1. Gate proprietary third-party publishing/mirroring steps behind `vars.ENABLE_UPSTREAM_*`.
-  2. Implement graceful authentication fallbacks (e.g., publish to GitHub Container Registry `ghcr.io` via built-in `GITHUB_TOKEN` by default; authenticate to DockerHub/PyPI/npm only if the user provides the repository secrets).
+- You are authorized to create repository secrets, repository variables, and test pre-releases using `gh secret set`, `gh variable set`, and `gh release create`.
+- **Missing Credentials**: When a workflow requires signing keys (e.g., GPG keys for binary/checksum signing), tokens, or registry credentials, generate valid self-signed/test equivalents locally, upload them via `gh secret set`, and immediately delete the temporary local private key files.
+- **Security Hygiene**:
+  - NEVER print secret values to stdout, commit secrets into `.yml`, `.diff`, or `.md` files, or expose secrets in `pull_request_target` workflows.
+  - Actionlint disallows `secrets` in job-level or step-level `if:` expressions. Pass secrets via `env:` and check their presence inside the shell script:
+    ```yaml
+    env:
+      MY_TOKEN: ${{ secrets.MY_TOKEN }}
+    run: |
+      if [ -z "$MY_TOKEN" ]; then
+        echo "::warning::MY_TOKEN not configured. Skipping step."
+        exit 0
+      fi
+    ```
+- **Release Isolation**: Ensure any release or tag creation targets only this fork (`${{ github.repository }}`) and marks test releases as `--prerelease` (with `--clobber` for idempotent testing) so production release history stays clean.
 
-### D. GitHub Actions `workflow_run` Default Branch Enforcement
-- **Symptom**: Downstream workflows triggered by `on: workflow_run` execute outdated or broken code despite committing fixes on a feature branch.
-- **Root Cause**: GitHub Actions specification strictly mandates that workflows triggered by `workflow_run` ALWAYS execute using the YAML file on the **repository's default branch (`main` or `master`)**.
-- **Fix**: Merge the PR into `main` so the fixed workflow definition is present on `main` before testing `workflow_run` triggers.
+---
 
-### E. Container Actions Reading `/github/workflow/event.json` (e.g., OpenSSF Scorecard)
-- **Symptom**: Container actions fail with `Only the default branch is supported`.
-- **Root Cause**: The container directly parses `/github/workflow/event.json`. If `event.ref` is not `refs/heads/<default_branch>`, it aborts. Environment variables cannot spoof this.
-- **Fix**: Run and verify default-branch-restricted actions directly on `main` after merging the PR.
+## 4. UNIVERSAL ARCHITECTURAL PATTERNS & LESSONS LEARNED
 
-### F. Shell & Tool Exit Code Differentiations
-- **Symptom**: Diagnostic or security scanners (e.g., `govulncheck`, audit tools) return a non-zero exit code (e.g. code 3) when known dependency vulnerabilities exist, failing CI even when the tool executed properly.
-- **Fix**: Distinguish between informational finding exit codes and fatal tool crash codes (code 1 or 2):
+Keep these GitHub Actions constraints in mind across all languages and frameworks:
+
+1. **`workflow_run` Default Branch Enforcement**:
+   - Workflows triggered by `on: workflow_run` ALWAYS execute using the YAML file located on the repository's **default branch (`main` or `master`)**, completely ignoring the branch where the triggering workflow ran.
+   - If a `workflow_run` workflow fails due to upstream bugs, its fix CANNOT be tested on a feature branch alone; the PR containing the fix must be merged to the default branch to take effect.
+2. **Container Actions Reading `/github/workflow/event.json` (e.g., OpenSSF Scorecard)**:
+   - Actions like `ossf/scorecard-action` inspect GitHub's raw `event.json`. If `event.ref` is not `refs/heads/<default_branch>`, the binary exits with a fatal error: `Only the default branch is supported`.
+   - Environment variables cannot spoof `event.json`. Such workflows must execute directly on the default branch.
+3. **Windows PowerShell Redirection Pitfall**:
+   - In Windows PowerShell, redirecting output with `git diff ... > file.diff` defaults to UTF-16LE or corrupts UTF-8 symbols (e.g. `→`).
+   - ALWAYS use `git diff --output=workflow-fix/<name>.diff` to preserve byte-exact UTF-8 line endings.
+4. **Tool Exit Code Differentiations (e.g., `govulncheck`, audit scanners)**:
+   - Differentiate between informational vulnerability findings (e.g., exit code 3 for detected CVEs in dependencies) and fatal tool crashes (exit code 1 or 2). Capture code 3 to display the report without crashing CI.
+5. **Cross-Repository Dispatches**:
+   - Upstream releases often dispatch events to companion repositories (`<repo>-upgrade`, docs repos, etc.).
+   - Use dynamic URLs: `https://api.github.com/repos/${{ github.repository_owner }}/<companion-repo>/dispatches`.
+   - Handle missing PATs gracefully with warnings rather than failing the core product build.
+
+---
+
+## 5. ITERATIVE WORKFLOW-BY-WORKFLOW EXECUTION LOOP
+
+Process workflows **sequentially** using a 3-tier strategy:
+- **Tier 1**: Linters, static security analysis, stale bots, fast unit test suites.
+- **Tier 2**: Core compilation, reusable workflows, integration test suites, VM smoke tests.
+- **Tier 3**: Multi-architecture packaging, container registry publishing, security scanners, releases, companion bots.
+
+### Per-Workflow Execution Cycle:
+1. **Analyze**: Inspect `.github/workflows/<name>.yml` for upstream-only assumptions, deprecated actions, runner mismatches, missing secrets/variables, and `permissions:` scopes.
+2. **Validate**: Run `actionlint .github/workflows/<name>.yml` locally to catch syntax and expression errors before pushing.
+3. **Modify**: Apply minimal, surgical fixes to `.github/workflows/<name>.yml` (and supporting scripts/Makefiles only if strictly required for fork compatibility).
+4. **Commit & Push**: Commit and push changes to the audit branch.
+5. **Trigger**: Trigger the workflow via `gh workflow run <name>.yml --ref <branch>` (or push/label depending on trigger).
+6. **Monitor**: Poll the run status every 30-60 seconds (`gh run list` / `gh run view`) until completion.
+7. **Diagnose & Fix**: If the run fails, fetch failed job logs (`gh run view <run-id> --log-failed`), diagnose the root cause, fix it, push, and re-run until the workflow passes genuinely.
+8. **Save Deliverables**: Save `workflow-fix/<name>.diff` and `workflow-fix/<name>.md` before moving to the next workflow.
+
+---
+
+## 6. REQUIRED DELIVERABLES SAVED IN `workflow-fix/` (PER WORKFLOW)
+
+Once a workflow passes completely, generate and save **both** files inside the `workflow-fix/` directory:
+
+### Deliverable A: Clean Cumulative Diff File (`workflow-fix/<name>.diff`)
+- Generate the exact diff against `$BASE_COMMIT`:
   ```bash
-  EXIT_CODE=0
-  tool_binary ./... || EXIT_CODE=$?
-  if [ "$EXIT_CODE" -eq 3 ]; then
-    echo "Vulnerabilities detected; report displayed above."
-    exit 0
-  elif [ "$EXIT_CODE" -ne 0 ]; then
-    echo "Tool crashed with exit code $EXIT_CODE"
-    exit $EXIT_CODE
-  fi
+  git diff --output=workflow-fix/<name>.diff $BASE_COMMIT..HEAD -- .github/workflows/<name>.yml
   ```
+- If supporting repository files (scripts, Makefiles, config) were modified for this workflow, save their diff to `workflow-fix/<name>-supporting.diff` so that `workflow-fix/<name>.diff` applies cleanly.
+- If a workflow required 0 modifications, create an empty 0-byte file (`workflow-fix/<name>.diff`).
 
-### G. Dispatching Companion Repositories
-- **Symptom**: Upstream releases trigger companion repositories via repository dispatches (`curl -XPOST .../dispatches`) using hardcoded paths and missing PATs.
-- **Fix**: Target companion repos dynamically:
-  ```bash
-  https://api.github.com/repos/${{ github.repository_owner }}/<companion-repo>/dispatches
-  ```
-  Check if the personal access token (`${{ secrets.COMPANION_PAT }}`) is set; if unset, output a clear `::warning::` without failing the core release.
-
-### H. Windows / Cross-Platform PowerShell Encoding
-- **Symptom**: Windows PowerShell redirection (`>`) emits UTF-16LE or corrupts UTF-8 symbols, causing `git apply` to fail with patch corruption.
-- **Fix**: Always use Git's built-in binary-safe output flag:
-  ```bash
-  git diff --output=workflow-fix/<name>.diff $BASE_COMMIT..HEAD -- <file>
-  ```
-
----
-
-## 3. THREE-TIER EXECUTION STRATEGY
-
-Divide the repository's workflows into three distinct tiers and execute systematically:
-
-```
-┌───────────────────────────────────────────────────────────┐
-│ Tier 1: Static, Linters, Security Scanners & Unit Tests   │
-│ (Actionlint, Linters, CodeQL, Stalebot, Fast Unit Suites) │
-└─────────────────────────────┬─────────────────────────────┘
-                              ▼
-┌───────────────────────────────────────────────────────────┐
-│ Tier 2: Core Build & Integration Pipelines               │
-│ (Reusable Builds, Integration Tests, VM/OS Smoke Tests)   │
-└─────────────────────────────┬─────────────────────────────┘
-                              ▼
-┌───────────────────────────────────────────────────────────┐
-│ Tier 3: Packaging, Multi-Arch Release & Security Audits   │
-│ (Releases, Multi-Arch Images, Trivy, Scorecard, Bots)     │
-└───────────────────────────────────────────────────────────┘
-```
-
-### Phase 1: Baseline & Inventory
-1. Pin `$BASE_COMMIT = $(git rev-parse HEAD)` in `workflow-fix/.base_commit`.
-2. List all workflows: `gh workflow list -a`.
-3. Enable all workflows that GitHub disabled automatically: `gh workflow enable <id-or-name>`.
-4. Create audit branch: `git checkout -b workflow-fix/audit-all-workflows`.
-5. Open PR early against `main` to track check status.
-
-### Phase 2: Tiered Pipeline Verification
-- **Execute Tier 1**: Add `workflow_dispatch` where missing, fix shallow checkout depths, verify actionlint, trigger runs, and document passing run IDs.
-- **Execute Tier 2**: Adapt runners to GitHub-hosted instances, calibrate test parallelism/resources if runners face memory pressure, verify builds and uploads.
-- **Execute Tier 3**:
-  - Gated proprietary third-party infrastructure with repository variables.
-  - Setup container publishing to GHCR and/or DockerHub with repository secrets.
-  - Verify release asset generation, checksum calculation, and release tagging.
-
-### Phase 3: Merging PR & Verifying Default-Branch Workflows
-1. Verify all diffs apply cleanly against `$BASE_COMMIT`:
-   ```bash
-   git apply --check --allow-empty workflow-fix/*.diff
-   ```
-2. Merge the audited PR into `main` (`gh pr merge --merge`).
-3. Switch local to `main` and pull latest: `git checkout main && git pull origin main`.
-4. Trigger and verify workflows that mandate default branch execution (e.g., Scorecard, Trivy scan via `workflow_run`).
-5. Confirm 100% of workflows have verified passing runs.
-
----
-
-## 4. REQUIRED DELIVERABLES CONTRACT
-
-For EVERY workflow in the repository, create two dedicated files in `workflow-fix/`:
-
-### Deliverable 1: `workflow-fix/<name>.diff`
-- Standalone patch against `$BASE_COMMIT`.
-- Generated strictly via `git diff --output=workflow-fix/<name>.diff $BASE_COMMIT..HEAD -- .github/workflows/<file>`.
-- If a workflow required 0 modifications, create an empty 0-byte `.diff` file.
-
-### Deliverable 2: `workflow-fix/<name>.md`
-Each file must follow this exact 6-section structure:
+### Deliverable B: Detailed Markdown Documentation File (`workflow-fix/<name>.md`)
+Each markdown documentation file must strictly follow this 6-section structure:
 ```markdown
 # Workflow Fix & Audit Documentation: `<filename>`
 
 ## 1. Workflow Overview & Triggers
-- Workflow Name, File Path, Original Purpose, Triggers, Job Dependency Graph.
+- Workflow Name, File Path, Original Purpose, Triggers (`push`, `pull_request`, `schedule`, `release`, `workflow_dispatch`), and Job Dependency Graph.
 
 ## 2. Root Cause Analysis in Fork
-- Specific reasons why this workflow failed, was skipped, or was disabled in the fork.
+- Exact error messages, log snippets, and architectural reasons why each job failed or was skipped in the fork.
 
 ## 3. Detailed Code Changes & Rationale
-- Line-by-line explanation of changes and how genuine testing integrity is preserved.
+- Line-by-line / block-by-block walkthrough of every change made in `.github/workflows/<name>.yml` (with before/after YAML snippets) and **why** this approach was chosen over alternatives (confirming no tests or build steps were blindly skipped).
 
 ## 4. Alternate Jobs & Feature Flags (If Applicable)
-- Runner substitutions, scale parameter calibrations, or feature flags introduced.
+- Explanation of any upstream job that could not run on a fork, details of the fork-equivalent alternate job created for this fork's release model, the exact variable/input flag name (e.g., `ENABLE_UPSTREAM_<JOB>`), its default value, and how to toggle between fork mode and upstream mode.
 
-## 5. Secrets & Variables Created / Required
-- Table of Secrets and Variables, their purpose, format, and exact `gh` CLI commands to configure them.
+## 5. Secrets & Variables Created/Required
+- Markdown table listing every Secret and Variable created or used (`Name`, `Type [Secret/Variable]`, `Purpose`, `How Generated / Format`, `Exact gh CLI Command Used to Set` — without printing raw secret values).
 
 ## 6. Verification Proof
-- Workflow State, Verified Run ID, Direct Run URL, Duration, and Job-by-Job breakdown table.
-```
-
-### Deliverable 3: Master Reports
-- `workflow-fix/FINAL_ALL_WORKFLOWS_AUDIT_REPORT.md`: Master matrix of all workflows, verified run IDs, duration, and status.
-- `workflow-fix/FORK_RELEASE_AND_CREDENTIALS_AUDIT.md`: Complete audit of all skipped actions, release artifact impacts, and required credentials.
+- Passing GitHub Actions Run ID, direct URL, duration, branch/commit tested, and a job-by-job status table showing every job's final state (`success` vs `skipped` with flag reason).
 ```
 
 ---
 
-## Why This Prompt Works Universally
+## 7. MANDATORY MASTER REPORTS & RELEASE IMPACT AUDIT
 
-1. **Language & Ecosystem Neutral**: It does not assume Go, Python, or JavaScript; rather, it targets the **GitHub Actions orchestrator layer**, runner management, secret segregation, and event semantics that govern all GitHub repositories.
-2. **Eliminates False Assumptions**: Prevents common LLM failures such as modifying code on feature branches and wondering why `workflow_run` didn't execute the change, or breaking `actionlint` by using `secrets` in `if:`.
-3. **Enterprise Audit Quality**: Leaves behind complete documentation, unified patches, and reproducible proof that any software engineering team or compliance auditor can inspect.
+Before concluding, generate the following two repository-wide master documents:
+
+### Deliverable C: `workflow-fix/FINAL_ALL_WORKFLOWS_AUDIT_REPORT.md`
+- Master matrix listing every single workflow in the repository, its trigger event, passing Run ID, job pass counts, duration, and status.
+- Summary of multi-agent collaboration and iterative fixes.
+- Instructions for maintainers to verify all diffs against `$BASE_COMMIT`.
+
+### Deliverable D: `workflow-fix/FORK_RELEASE_AND_CREDENTIALS_AUDIT.md` (CRITICAL)
+You MUST produce a dedicated audit answering these exact questions for the maintainers of the forked company:
+1. **Core Product Release Integrity**:
+   - Is there any workflow job or action that was skipped or removed that is actually required for the product build and release from the fork?
+   - Does any skipped action impact the released binaries, packages, or container images?
+   - Prove that all binaries, packages, container images, and release assets are 100% genuinely compiled, packaged, checksummed, and published.
+2. **Exhaustive Skipped / Gated Action Catalog**:
+   - Table cataloging every single job or step that was skipped, gated, or adapted across all workflows.
+   - For each item, document:
+     - Exact Workflow & Step name.
+     - Why it was skipped/gated.
+     - The exact credential, secret, or variable involved.
+     - Impact on the released product.
+     - How the forked company can enable it if they operate equivalent private infrastructure (e.g., private corporate S3, private Vault, custom registry).
+3. **Companion Repository Dispatch Analysis**:
+   - Analyze companion repository integrations (e.g. upgrade repos, documentation repos).
+   - Document why dispatch was skipped, how to fork the companion repository, and what exact PAT/secrets are needed.
+4. **Complete Credential Inventory**:
+   - Master reference table of every Secret and Variable across the entire repository with their exact `gh secret set` and `gh variable set` commands.
+
+---
+
+## 8. FINAL VERIFICATION & PULL REQUEST MERGE
+
+1. **Patch Integrity Verification**:
+   - Create a temporary worktree checked out at `$BASE_COMMIT`:
+     ```bash
+     git worktree add --detach ../test-worktree $BASE_COMMIT
+     for diff in workflow-fix/*.diff; do
+       git -C ../test-worktree apply --check --allow-empty "$diff"
+     done
+     git worktree remove --force ../test-worktree
+     ```
+   - Prove that all `.diff` patch files apply with 0 errors.
+2. **Pull Request Merge**:
+   - Merge the audited PR into the default branch (`gh pr merge --merge`).
+   - Pull the updated default branch locally (`git checkout main && git pull origin main`).
+3. **Default-Branch Workflow Execution**:
+   - Trigger and verify any workflows that strictly mandate default-branch execution (e.g. OpenSSF Scorecard, `workflow_run` triggered workflows).
+   - Confirm 100% success across all workflows on `main`.
+```
